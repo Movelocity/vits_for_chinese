@@ -1,0 +1,22 @@
+@echo off
+
+rem enable variable usage like !a! for calculation
+setlocal enabledelayedexpansion
+
+rem Count the number of .wav files in the current directory
+for /f %%i in ('dir /b /a-d *.wav ^| find /c /v ""') do set total_files=%%i
+
+set counter=0
+for /r %%i in (*.wav) do (
+    cls
+    set /a counter = !counter! + 1
+    set /a percentage = !counter! * 100 / !total_files!
+    echo [!percentage!%%] Processing: "%%i"
+
+    D:\dataset\vgmstream-win\test.exe "%%~nxi" > NUL
+    del "%%~nxi"
+)
+
+echo [100%%] Processing complete!
+
+pause
