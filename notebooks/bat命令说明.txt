@@ -40,3 +40,23 @@ for /r %%i in (*.wav) do (
 echo [100%%] Processing complete!
 
 pause
+
+##############################################################
+如果不想用windows的bat，也可以用python达到同样的效果。
+将以下代码的路径字符串补充完后复制到一个以.py结尾的文件夹内，
+打开cmd命令行输入python3然后空格，把.py结尾的文件拖入命令行，回车执行
+
+import os
+from glob import glob
+
+target_dir = "待解密语音文件夹"
+exec_file = "vgmstream的test.exe文件路径"
+
+files = glob(os.path.join(target_dir, "*.wav"))
+file_cnt = len(files)
+
+for i, fl in enumerate(files):
+    os.system(" ".join([exec_file, fl]))
+    print(f"\r{i/file_cnt}%", end="", flush=True)
+
+
