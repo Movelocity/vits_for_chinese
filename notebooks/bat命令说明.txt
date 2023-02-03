@@ -1,0 +1,42 @@
+rem 使用utf-8编码输出
+CHCP 65001
+
+rem 是助记rembember的意思，后面跟着一行注释，可以用 :: 替代
+::  文件后缀 bat 指的是 batch (批处理命令)，
+::  是DOS命令集，语法较linux的bash复杂得多，又不规范，属于是前天学了后天就会忘的那种。
+
+:: 批处理命令执行时，不用把命令显示在控制台
+@echo off
+
+:: 允许使用类似于 !a! 的运算
+setlocal enabledelayedexpansion
+
+:: 计算当前目录下的以.wav结尾的文件个数，用来统计进度
+::  这里用了一个for循环，/f遍历文件，/d遍历文件夹
+:: dir /b 只显示文件名(不显示日期),  /a-d不显示文件夹
+::  dir的结果通过 ^| 传给 find /c统计行数。find /v "" 显示除空字符串以外的所有行
+for /f %%i in ('dir /b /a-d *.wav ^| find /c /v ""') do set total_files=%%i
+
+::  当前进度为0
+set counter=0
+
+:: 遍历当前目录下的所有以.wav结尾的文件
+for /r %%i in (*.wav) do (
+    :: 清除上一个循环的输出
+    cls
+    :: 进度加一
+    set /a counter = !counter! + 1
+    :: 根据当前进度和total_files计算百分比
+    set /a percentage = !counter! * 100 / !total_files!
+    echo [!percentage!%%] Processing: "%%i"
+
+    :: 调用vgmstream对文件解码
+       :: %%~nxi 表示 %%i 的绝对路径
+    D:\dataset\vgmstream-win\test.exe "%%~nxi" > NUL
+    :: 解码后删除原来的文件
+    del "%%~nxi"
+)
+
+echo [100%%] Processing complete!
+
+pause
