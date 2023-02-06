@@ -96,6 +96,8 @@ class StochasticDurationPredictor(nn.Module):
 
 
 class DurationPredictor(nn.Module):
+  # 和StochasticDurationPredictor二选一
+  # 论文里随机时长预测比确定时长预测MOS高0.04
   def __init__(self, in_channels, filter_channels, kernel_size, p_dropout, gin_channels=0):
     super().__init__()
 
@@ -177,6 +179,7 @@ class TextEncoder(nn.Module):
 
 
 class ResidualCouplingBlock(nn.Module):
+  # flow-based model. 数据可以双向流动，只有一个方向需要学习，另一个方向可以推算出来
   def __init__(self,
       channels,
       hidden_channels,
@@ -195,8 +198,12 @@ class ResidualCouplingBlock(nn.Module):
     self.gin_channels = gin_channels
 
     self.flows = nn.ModuleList()
-    for i in range(n_flows):
-      self.flows.append(modules.ResidualCouplingLayer(channels, hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=gin_channels, mean_only=True))
+    for _ in range(n_flows):
+      self.flows.append(
+        modules.ResidualCouplingLayer(
+          channels, hidden_channels, kernel_size, dilation_rate, 
+          n_layers, gin_channels=gin_channels, mean_only=True)
+      )
       self.flows.append(modules.Flip())
 
   def forward(self, x, x_mask, g=None, reverse=False):
@@ -219,13 +226,13 @@ class PosteriorEncoder(nn.Module):
       n_layers,
       gin_channels=0):
     super().__init__()
-    self.in_channels = in_channels
+    # self.in_channels = in_channels
     self.out_channels = out_channels
-    self.hidden_channels = hidden_channels
-    self.kernel_size = kernel_size
-    self.dilation_rate = dilation_rate
-    self.n_layers = n_layers
-    self.gin_channels = gin_channels
+    # self.hidden_channels = hidden_channels
+    # self.kernel_size = kernel_size
+    # self.dilation_rate = dilation_rate
+    # self.n_layers = n_layers
+    # self.gin_channels = gin_channels
 
     self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
     self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=gin_channels)
@@ -334,12 +341,15 @@ class DiscriminatorP(torch.nn.Module):
 
 
 class DiscriminatorS(torch.nn.Module):
+    """
+    来自HifiGAN MultiScaleDiscriminator的第一个子模块
+    """
     def __init__(self, use_spectral_norm=False):
         super(DiscriminatorS, self).__init__()
         norm_f = weight_norm if use_spectral_norm == False else spectral_norm
         self.convs = nn.ModuleList([
             norm_f(Conv1d(1, 16, 15, 1, padding=7)),
-            norm_f(Conv1d(16, 64, 41, 4, groups=4, padding=20)),
+            norm_f(Conv1d(16, 64, 41, 4, groups=4, padding=20)), # 分组卷积
             norm_f(Conv1d(64, 256, 41, 4, groups=16, padding=20)),
             norm_f(Conv1d(256, 1024, 41, 4, groups=64, padding=20)),
             norm_f(Conv1d(1024, 1024, 41, 4, groups=256, padding=20)),
@@ -356,12 +366,17 @@ class DiscriminatorS(torch.nn.Module):
             fmap.append(x)
         x = self.conv_post(x)
         fmap.append(x)
-        x = torch.flatten(x, 1, -1)
+
+        x = torch.flatten(x, 1, -1)  
+        # 把从第二维到最后一维之间的数据平坦化，相当于fla = torch.nn.Flattern(); x = fla(x)
 
         return x, fmap
 
 
 class MultiPeriodDiscriminator(torch.nn.Module):
+    """
+    来自HifiGAN
+    """
     def __init__(self, use_spectral_norm=False):
         super(MultiPeriodDiscriminator, self).__init__()
         periods = [2,3,5,7,11]
@@ -415,24 +430,24 @@ class SynthesizerTrn(nn.Module):
     **kwargs):
 
     super().__init__()
-    self.n_vocab = n_vocab
-    self.spec_channels = spec_channels
-    self.inter_channels = inter_channels
-    self.hidden_channels = hidden_channels
-    self.filter_channels = filter_channels
-    self.n_heads = n_heads
-    self.n_layers = n_layers
-    self.kernel_size = kernel_size
-    self.p_dropout = p_dropout
-    self.resblock = resblock
-    self.resblock_kernel_sizes = resblock_kernel_sizes
-    self.resblock_dilation_sizes = resblock_dilation_sizes
-    self.upsample_rates = upsample_rates
-    self.upsample_initial_channel = upsample_initial_channel
-    self.upsample_kernel_sizes = upsample_kernel_sizes
+    # self.n_vocab = n_vocab
+    # self.spec_channels = spec_channels
+    # self.inter_channels = inter_channels
+    # self.hidden_channels = hidden_channels
+    # self.filter_channels = filter_channels
+    # self.n_heads = n_heads
+    # self.n_layers = n_layers
+    # self.kernel_size = kernel_size
+    # self.p_dropout = p_dropout
+    # self.resblock = resblock
+    # self.resblock_kernel_sizes = resblock_kernel_sizes
+    # self.resblock_dilation_sizes = resblock_dilation_sizes
+    # self.upsample_rates = upsample_rates
+    # self.upsample_initial_channel = upsample_initial_channel
+    # self.upsample_kernel_sizes = upsample_kernel_sizes
     self.segment_size = segment_size
     self.n_speakers = n_speakers
-    self.gin_channels = gin_channels
+    # self.gin_channels = gin_channels
 
     self.use_sdp = use_sdp
 
@@ -493,22 +508,21 @@ class SynthesizerTrn(nn.Module):
     logs_p = torch.matmul(attn.squeeze(1), logs_p.transpose(1, 2)).transpose(1, 2)
 
     z_slice, ids_slice = commons.rand_slice_segments(z, y_lengths, self.segment_size)
+    # 批次里每条语音只取一个片段用于计算loss，这里指定片段的偏移量，便于从ground truth里截取同样的片段
     o = self.dec(z_slice, g=g)
     return o, l_length, attn, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
 
   def infer(self, x, x_lengths, sid=None, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
     x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
-    if self.n_speakers > 0:
-      g = self.emb_g(sid).unsqueeze(-1) # [b, h, 1]
-    else:
-      g = None
 
-    if self.use_sdp:
-      logw = self.dp(x, x_mask, g=g, reverse=True, noise_scale=noise_scale_w)
-    else:
-      logw = self.dp(x, x_mask, g=g)
+    # speaker embedding
+    g = self.emb_g(sid).unsqueeze(-1) if self.n_speakers>0 else None  # [b, h, 1]
+
+    # predict alignments
+    logw = self.dp(x, x_mask, g=g, reverse=True, noise_scale=noise_scale_w) if self.use_sdp else self.dp(x, x_mask, g=g)
     w = torch.exp(logw) * x_mask * length_scale
     w_ceil = torch.ceil(w)
+
     y_lengths = torch.clamp_min(torch.sum(w_ceil, [1, 2]), 1).long()
     y_mask = torch.unsqueeze(commons.sequence_mask(y_lengths, None), 1).to(x_mask.dtype)
     attn_mask = torch.unsqueeze(x_mask, 2) * torch.unsqueeze(y_mask, -1)

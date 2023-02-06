@@ -1,0 +1,49 @@
+{
+  "train": {                  关于训练的配置
+    "log_interval": 2000,     隔多少步记录一次产生一条记录
+    "eval_interval": 10000,   隔多少步保存一次模型权重
+    "seed": 1234,             指定随机种子
+    "epochs": 20000,          最大迭代轮数
+    "learning_rate": 2e-4,    学习率，如果使用预训练过的模型，使用2e-5或更小。2e-5表示0.00002
+    "betas": [0.8, 0.99],     梯度下降的惯性参数，一般不用改
+    "eps": 1e-9,              为防止除以零而加在分母的小数
+    "batch_size": 24,         训练时一遍推理用到的音频个数，越大效果越好，但是显存占用越大
+    "fp16_run": true,         使用混合精度训练，牺牲部分精度加速训练
+    "lr_decay": 0.9998,       学习率衰减系数
+    "segment_size": 8192,     特殊方法，一个批次里每条语音只取一个片段用于训练，片段大小在这里设置     
+    "warmup_epochs": 0,       用几遍迭代来预热
+    "c_mel": 45,              计算合成频谱和目标频谱间差异的缩放因子
+    "c_kl": 1.0               计算分布之间差异的缩放因子
+  },
+  "data": {                   关于数据集的属性
+    "training_files":"filelists/mixed.txt.cleaned",     训练用的文件列表，内部格式(文件名|音素)或(文件名|说话者编号|音素)
+    "validation_files":"filelists/mixedv.txt.cleaned",  验证训练效果用的，需要一个不在训练集里的文件，一个就够。内部格式同上
+    "max_wav_value": 32768.0, 数据集里的波形数据的最大值
+    "sampling_rate": 22050,   采样率。人耳能听到的声音频率20~20KHz。
+    "filter_length": 1024,    频谱图的最大频率
+    "hop_length": 256,        短期时域转频域的滑窗跳动距离
+    "win_length": 1024,       短期时域转频域的滑窗大小
+    "n_mel_channels": 80,     梅尔频谱的通道数
+    "mel_fmin": 0.0,          梅尔频谱的最小频率
+    "mel_fmax": null,         梅尔频谱的最大频率
+    "add_blank": false,       每个音素之间插空，需要额外一个<blank>符号
+    "n_speakers": 2           说话者的个数，会影响到模型保存的编码个数
+  },
+  "model": {
+    "inter_channels": 192,    模块之间传递的特征的通道数
+    "hidden_channels": 192,   模块内部计算用的特征通道数
+    "filter_channels": 768,   注意力模块的卷积核通道数
+    "n_heads": 2,             注意力模块头的个数（广度）
+    "n_layers": 6,            注意力模块的个数（深度）
+    "kernel_size": 3,         注意力模块卷积核的大小
+    "p_dropout": 0.1,         注意力模块部分输出归零的概率，防止模型过拟合
+    "resblock": "1",          残差层的种类，选择字符串"1"或"2"
+    "resblock_kernel_sizes": [3,7,11],                       多尺度感受野的几个卷积核大小 (HifiGAN)
+    "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],  多尺度感受野的几个卷积核(各自的)内部间隔大小 (HifiGAN)
+    "upsample_rates": [8,8,2,2],           上采样中转置卷积的步长 (HifiGAN)
+    "upsample_initial_channel": 512,       上采样中第一次转化到的特征通道数 (HifiGAN)
+    "upsample_kernel_sizes": [16,16,4,4],  上采样中转置卷核的大小 (HifiGAN)
+    "use_spectral_norm": false,  是否在尺度判别器种对输入信号平滑处理
+    "gin_channels": 256          说话者编码的长度
+  }
+}

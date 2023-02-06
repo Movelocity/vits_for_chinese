@@ -160,9 +160,8 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         self.win_length    = hparams.win_length
         self.sampling_rate = hparams.sampling_rate
 
-        self.cleaned_text = getattr(hparams, "cleaned_text", False)
-
         self.add_blank = hparams.add_blank
+        self.cleaned_text = getattr(hparams, "cleaned_text", False)        
         self.min_text_len = getattr(hparams, "min_text_len", 1)
         self.max_text_len = getattr(hparams, "max_text_len", 190)
 

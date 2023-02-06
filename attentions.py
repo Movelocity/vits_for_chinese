@@ -1,25 +1,22 @@
-import copy
 import math
-import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 import commons
-import modules
 from modules import LayerNorm
    
 
 class Encoder(nn.Module):
   def __init__(self, hidden_channels, filter_channels, n_heads, n_layers, kernel_size=1, p_dropout=0., window_size=4, **kwargs):
     super().__init__()
-    self.hidden_channels = hidden_channels
-    self.filter_channels = filter_channels
-    self.n_heads = n_heads
+    # self.hidden_channels = hidden_channels
+    # self.filter_channels = filter_channels
+    # self.n_heads = n_heads
     self.n_layers = n_layers
-    self.kernel_size = kernel_size
-    self.p_dropout = p_dropout
-    self.window_size = window_size
+    # self.kernel_size = kernel_size
+    # self.p_dropout = p_dropout
+    # self.window_size = window_size
 
     self.drop = nn.Dropout(p_dropout)
     self.attn_layers = nn.ModuleList()
@@ -257,13 +254,13 @@ class MultiHeadAttention(nn.Module):
 class FFN(nn.Module):
   def __init__(self, in_channels, out_channels, filter_channels, kernel_size, p_dropout=0., activation=None, causal=False):
     super().__init__()
-    self.in_channels = in_channels
-    self.out_channels = out_channels
-    self.filter_channels = filter_channels
+    # self.in_channels = in_channels
+    # self.out_channels = out_channels
+    # self.filter_channels = filter_channels
     self.kernel_size = kernel_size
-    self.p_dropout = p_dropout
+    # self.p_dropout = p_dropout
     self.activation = activation
-    self.causal = causal
+    # self.causal = causal
 
     if causal:
       self.padding = self._causal_padding

@@ -1,0 +1,36 @@
+数据集说明
+
+1.准备好文本数据集
+    1.1单个说话者训练，每行需要有2列 (默认以 | 作为行内的分隔符)
+    例如: 
+        audiofile1.wav|那块大石头上闪着红光的。
+
+    1.2多个说话者训练，每行需要有3列
+    例如:
+        audiofile2.wav|0|哇，这就是啊。
+        audiofile3.wav|1|他们走了。
+
+2.生成音素数据集
+    准备好自己的中文数据集和标签后, 在本项目的路径下(xxx/vits_for_chinese)运行这个:
+        from preprocess import preprocess, validate_tokens
+        preprocess('./filelists/XXXX.txt') # 汉字转声母韵母
+        validate_tokens('./filelists/XXXX.txt.cleaned')  # 检查有没有错误
+    由于还没有写cleaner，为了避免脏数据，非中文的符号请去掉，顿号请换成逗号
+
+    完成后就可以得到以.cleaned结尾的数据:
+        ./wave_data/audio2.wav|o2 ， h en3 y ou3 d ao4 l i3 n e ？
+        ./wave_data/1014 00388.wav|k a3 r ui4 y a4 m o2 sh ou4 r u4 q in1 ，
+
+    或者有多个说话者:
+        ./wave_data/audio803.wav|1|d ui4 d ui4 ， n i3 z ai4 d e h ua4 y in1 q ue4 sh i2 h en3 k e3 n eg2 h ui4 h uo2 x ia4 l ai2 ， d an4 q i2 t a1 r en2 b ao1 k uo4 n i3 z i4 j i3 ， n a4 k e3 j iu4 w ei4 b i4 l e b a ？
+        ./wave_data/2015 00165.wav|0|n a4 d ao4 m en2 。
+        ./wave_data/1014 00388.wav|0|k a3 r ui4 y a4 m o2 sh ou4 r u4 q in1 ，
+
+3.得到更好的语音模型
+    通常的语音转文本技术难免会有误差：
+    比如: 1007 00032.wav|大英，在这里你有见过秦团长吗？
+    这里把 戴(d ai4) 当成了 大(d a4), 错误的数据每个迭代都会被用一次，可能导致语音模型混淆 ai 和 a。
+    由于 秦(q in2) 和 琴(q in2) 同音，所以这个不会对模型造成坏的影响。
+    为了更好的模型，有时间请检查几遍自己的数据集。
+
+

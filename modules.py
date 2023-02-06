@@ -14,7 +14,7 @@ from commons import init_weights, get_padding
 from transforms import piecewise_rational_quadratic_transform
 
 
-LRELU_SLOPE = 0.1
+LRELU_SLOPE = 0.1  # LeakyReLU的负半轴斜率
 
 
 class LayerNorm(nn.Module):
