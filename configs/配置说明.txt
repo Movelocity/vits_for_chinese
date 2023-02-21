@@ -12,8 +12,8 @@
     "lr_decay": 0.9998,       学习率衰减系数
     "segment_size": 8192,     特殊方法，一个批次里每条语音只取一个片段用于训练，片段大小在这里设置     
     "warmup_epochs": 0,       用几遍迭代来预热
-    "c_mel": 45,              计算合成频谱和目标频谱间差异的缩放因子
-    "c_kl": 1.0               计算分布之间差异的缩放因子
+    "c_mel": 45,              计算合成频谱和目标频谱间差异的缩放系数
+    "c_kl": 1.0               计算分布之间差异的缩放系数
   },
   "data": {                   关于数据集的属性
     "training_files":"filelists/mixed.txt.cleaned",     训练用的文件列表，内部格式(文件名|音素)或(文件名|说话者编号|音素)
@@ -31,13 +31,13 @@
   },
   "model": {
     "inter_channels": 192,    模块之间传递的特征的通道数
-    "hidden_channels": 192,   模块内部计算用的特征通道数
+    "hidden_channels": 192,   模块内部计算用的特征通道数，embedding的编码长度
     "filter_channels": 768,   注意力模块的卷积核通道数
     "n_heads": 2,             注意力模块头的个数（广度）
     "n_layers": 6,            注意力模块的个数（深度）
     "kernel_size": 3,         注意力模块卷积核的大小
     "p_dropout": 0.1,         注意力模块部分输出归零的概率，防止模型过拟合
-    "resblock": "1",          残差层的种类，选择字符串"1"或"2"
+    "resblock": "1",          残差层的种类，选择字符串"1"或"2" (HifiGAN)
     "resblock_kernel_sizes": [3,7,11],                       多尺度感受野的几个卷积核大小 (HifiGAN)
     "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],  多尺度感受野的几个卷积核(各自的)内部间隔大小 (HifiGAN)
     "upsample_rates": [8,8,2,2],           上采样中转置卷积的步长 (HifiGAN)

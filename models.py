@@ -97,7 +97,7 @@ class StochasticDurationPredictor(nn.Module):
 
 class DurationPredictor(nn.Module):
   # 和StochasticDurationPredictor二选一
-  # 论文里随机时长预测比确定时长预测MOS高0.04
+  # 论文里随机时长预测比这个确定时长预测MOS高0.04
   def __init__(self, in_channels, filter_channels, kernel_size, p_dropout, gin_channels=0):
     super().__init__()
 
@@ -135,6 +135,7 @@ class DurationPredictor(nn.Module):
 
 
 class TextEncoder(nn.Module):
+  # 文本侧的编码器
   def __init__(self,
       n_vocab,
       out_channels,
@@ -178,7 +179,8 @@ class TextEncoder(nn.Module):
     return x, m, logs, x_mask
 
 
-class ResidualCouplingBlock(nn.Module):
+class ResidualCouplingBlock(nn.Module): 
+  # 来自 WaveGlow
   # flow-based model. 数据可以双向流动，只有一个方向需要学习，另一个方向可以推算出来
   def __init__(self,
       channels,
@@ -189,13 +191,13 @@ class ResidualCouplingBlock(nn.Module):
       n_flows=4,
       gin_channels=0):
     super().__init__()
-    self.channels = channels
-    self.hidden_channels = hidden_channels
-    self.kernel_size = kernel_size
-    self.dilation_rate = dilation_rate
-    self.n_layers = n_layers
-    self.n_flows = n_flows
-    self.gin_channels = gin_channels
+    # self.channels = channels
+    # self.hidden_channels = hidden_channels
+    # self.kernel_size = kernel_size
+    # self.dilation_rate = dilation_rate
+    # self.n_layers = n_layers
+    # self.n_flows = n_flows
+    # self.gin_channels = gin_channels
 
     self.flows = nn.ModuleList()
     for _ in range(n_flows):
@@ -217,6 +219,7 @@ class ResidualCouplingBlock(nn.Module):
 
 
 class PosteriorEncoder(nn.Module):
+  # 音频侧的编码器
   def __init__(self,
       in_channels,
       out_channels,
@@ -472,7 +475,7 @@ class SynthesizerTrn(nn.Module):
       self.emb_g = nn.Embedding(n_speakers, gin_channels)
 
   def forward(self, x, x_lengths, y, y_lengths, sid=None):
-
+    # x: 文本编码；y: 语音频谱
     x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
     if self.n_speakers > 0:
       g = self.emb_g(sid).unsqueeze(-1) # [b, h, 1]
