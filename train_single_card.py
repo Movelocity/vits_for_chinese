@@ -193,7 +193,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
             lr = optim_g.param_groups[0]['lr']
             losses = [loss_disc, loss_gen, loss_fm,
                         loss_mel, loss_dur, loss_kl]
-            logger.info('Train Epoch: {} [{:.0f}%]'.format(
+            print('Train Epoch: {} [{:.0f}%]'.format(
                 epoch,
                 100. * batch_idx / len(train_loader)))
             logger.info([x.item() for x in losses] + [global_step, lr])
@@ -230,7 +230,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
         global_step += 1
 
     if rank == 0:
-        logger.info('====> Epoch: {}'.format(epoch))
+        print('====> Epoch: {}'.format(epoch))
 
 
 def evaluate(hps, generator, eval_loader, writer_eval):
