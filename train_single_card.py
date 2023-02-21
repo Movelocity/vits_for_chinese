@@ -40,7 +40,7 @@ def main():
     assert torch.cuda.is_available(), "CPU training is not allowed."
 
     os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '9999'
+    os.environ['MASTER_PORT'] = '7860'
 
     hps = utils.get_hparams()
 
