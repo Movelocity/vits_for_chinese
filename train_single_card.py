@@ -59,11 +59,11 @@ def main():
         rank=0,
         shuffle=True)
     collate_fn = TextAudioCollate()
-    train_loader = DataLoader(train_dataset, num_workers=6, shuffle=False, pin_memory=True,
+    train_loader = DataLoader(train_dataset, num_workers=2, shuffle=False, pin_memory=True,
                               collate_fn=collate_fn, batch_sampler=train_sampler)
     # if rank == 0:
     eval_dataset = TextAudioLoader(hps.data.validation_files, hps.data)
-    eval_loader = DataLoader(eval_dataset, num_workers=6, shuffle=False,
+    eval_loader = DataLoader(eval_dataset, num_workers=2, shuffle=False,
                                 batch_size=hps.train.batch_size, pin_memory=True,
                                 drop_last=False, collate_fn=collate_fn)
 
@@ -250,7 +250,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
             y_lengths = y_lengths[:1]
             break
         y_hat, attn, mask, * \
-            _ = generator.module.infer(x, x_lengths, max_len=1000)
+            _ = generator.infer(x, x_lengths, max_len=1000)
         y_hat_lengths = mask.sum([1, 2]).long() * hps.data.hop_length
 
         mel = spec_to_mel_torch(
