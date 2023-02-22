@@ -220,8 +220,8 @@ def evaluate(hps, generator, writer_eval, epoch):
 
     audio_dict = {}
     for data in eval_data:
-        phonemes = pypinyin_g2p_phone(data[-1])
-        input_ids = torch.LongTensor(tokens2ids(phonemes)).unsqueeze(0).to(generator.device)
+        phonemes = text.pypinyin_g2p_phone(data[-1])
+        input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).to(generator.device)
         input_lengths = torch.LongTensor([input_ids.size(1)]).to(generator.device)
         sid = torch.LongTensor([data[1]]).to(generator.device)
         audio = net_g.infer(input_ids, input_lengths, sid=sid)[0][0,0].data.cpu().float().numpy()
