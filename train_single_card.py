@@ -224,7 +224,7 @@ def evaluate(hps, generator, writer_eval, epoch):
         phonemes = text.pypinyin_g2p_phone(data[-1])
         input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).to(device)
         input_lengths = torch.LongTensor([input_ids.size(1)]).to(device)
-        sid = torch.LongTensor([data[1]]).to(device)
+        sid = torch.LongTensor([int(data[1])]).to(device)
         audio = net_g.infer(input_ids, input_lengths, sid=sid)[0][0,0].data.cpu().float().numpy()
         audio_dict.update({data[-1]: audio})
 
