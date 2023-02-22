@@ -427,7 +427,7 @@ class SynthesizerTrn(nn.Module):
     upsample_rates, 
     upsample_initial_channel, 
     upsample_kernel_sizes,
-    n_speakers=0,
+    n_speakers=1,
     gin_channels=0,
     use_sdp=True,
     **kwargs):
@@ -454,8 +454,7 @@ class SynthesizerTrn(nn.Module):
     else:
       self.dp = DurationPredictor(hidden_channels, 256, 3, 0.5, gin_channels=gin_channels)
 
-    if n_speakers > 1:
-      self.emb_g = nn.Embedding(n_speakers, gin_channels)
+    self.emb_g = nn.Embedding(n_speakers, gin_channels)
 
   def forward(self, x, x_lengths, y, y_lengths, sid):
     # x: 文本编码；y: 语音频谱
