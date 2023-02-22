@@ -125,9 +125,10 @@ def plot_alignment_to_numpy(alignment, info=None):
   plt.close()
   return data
 
+import torchaudio
 def load_wav_to_torch(full_path):
-  sampling_rate, data = read(full_path)
-  return torch.FloatTensor(data.astype(np.float32)), sampling_rate
+    wav, sr = torchaudio.load(full_path)[0]
+    return torch.FloatTensor(wav), sr
 
 def get_hparams(args):
     model_dir = os.path.join("./logs", args.model)

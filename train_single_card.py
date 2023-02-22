@@ -220,13 +220,13 @@ def evaluate(hps, generator, writer_eval, epoch):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     audio_dict = {}
-    for data in eval_data:
+    for i, data in enumerate(eval_data):
         phonemes = text.pypinyin_g2p_phone(data[-1])
         input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).to(device)
         input_lengths = torch.LongTensor([input_ids.size(1)]).to(device)
         sid = torch.LongTensor([int(data[1])]).to(device)
-        audio = generator.infer(input_ids, input_lengths, sid=sid)[0][0,0].data.cpu().float().numpy()
-        audio_dict.update({data[-1]: audio})
+        audio = generator.infer(input_ids, input_lengths, sid=sid)[0]
+        audio_dict.update({str(i): audio[0, :, :y_hat_lengths[0]]})
 
     utils.summarize(
         writer=writer_eval,
