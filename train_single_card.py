@@ -217,13 +217,14 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 def evaluate(hps, generator, writer_eval, epoch):
     generator.eval()
     eval_data = load_filepaths_and_text(hps.data.validation_files)[:4]
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     audio_dict = {}
     for data in eval_data:
         phonemes = text.pypinyin_g2p_phone(data[-1])
-        input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).to(generator.device)
-        input_lengths = torch.LongTensor([input_ids.size(1)]).to(generator.device)
-        sid = torch.LongTensor([data[1]]).to(generator.device)
+        input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).to(device)
+        input_lengths = torch.LongTensor([input_ids.size(1)]).to(device)
+        sid = torch.LongTensor([data[1]]).to(device)
         audio = net_g.infer(input_ids, input_lengths, sid=sid)[0][0,0].data.cpu().float().numpy()
         audio_dict.update({data[-1]: audio})
 
