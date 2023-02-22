@@ -1,7 +1,6 @@
 import os
 import glob
 import sys
-import argparse
 import logging
 import json
 import subprocess
@@ -11,7 +10,7 @@ import torch
 
 MATPLOTLIB_FLAG = False
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
@@ -55,7 +54,6 @@ def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
               'optimizer': optimizer.state_dict(),
               'learning_rate': learning_rate}, checkpoint_path)
 
-
 def summarize(writer, global_step, scalars={}, histograms={}, images={}, audios={}, audio_sampling_rate=22050):
   for k, v in scalars.items():
     writer.add_scalar(k, v, global_step)
@@ -66,14 +64,13 @@ def summarize(writer, global_step, scalars={}, histograms={}, images={}, audios=
   for k, v in audios.items():
     writer.add_audio(k, v, global_step, audio_sampling_rate)
 
-
 def latest_checkpoint_path(dir_path, regex="G_*.pth"):
+  """找出最新的模型并返回其路径"""
   f_list = glob.glob(os.path.join(dir_path, regex))
   f_list.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
   x = f_list[-1]
   print(x)
   return x
-
 
 def plot_spectrogram_to_numpy(spectrogram):
   global MATPLOTLIB_FLAG
@@ -99,7 +96,6 @@ def plot_spectrogram_to_numpy(spectrogram):
   data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
   plt.close()
   return data
-
 
 def plot_alignment_to_numpy(alignment, info=None):
   global MATPLOTLIB_FLAG
@@ -129,50 +125,23 @@ def plot_alignment_to_numpy(alignment, info=None):
   plt.close()
   return data
 
-
 def load_wav_to_torch(full_path):
   sampling_rate, data = read(full_path)
   return torch.FloatTensor(data.astype(np.float32)), sampling_rate
 
+def get_hparams(args):
+    model_dir = os.path.join("./logs", args.model)
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
 
-def load_filepaths_and_text(filename, split="|"):
-  with open(filename, encoding='utf-8') as f:
-    filepaths_and_text = []
-    for line in f:
-      path_text = line.strip().split(split)
-      filepaths_and_text.append(path_text)
-  return filepaths_and_text
-
-
-def get_hparams(init=True):
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-c', '--config', type=str, default="./configs/paimon_base.json",
-                      help='JSON file for configuration')
-  parser.add_argument('-m', '--model', type=str, required=True,
-                      help='Model name')
-  
-  args = parser.parse_args()
-  model_dir = os.path.join("./logs", args.model)
-
-  if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
-
-  config_path = args.config
-  config_save_path = os.path.join(model_dir, "config.json")
-  if init:
+    config_path = args.config
     with open(config_path, "r") as f:
-      data = f.read()
-    with open(config_save_path, "w") as f:
-      f.write(data)
-  else:
-    with open(config_save_path, "r") as f:
-      data = f.read()
-  config = json.loads(data)
+        data = f.read()
+    config = json.loads(data)
   
-  hparams = HParams(**config)
-  hparams.model_dir = model_dir
-  return hparams
-
+    hparams = HParams(**config)
+    hparams.model_dir = model_dir
+    return hparams
 
 def get_hparams_from_dir(model_dir):
   config_save_path = os.path.join(model_dir, "config.json")
@@ -184,7 +153,6 @@ def get_hparams_from_dir(model_dir):
   hparams.model_dir = model_dir
   return hparams
 
-
 def get_hparams_from_file(config_path):
   with open(config_path, "r") as f:
     data = f.read()
@@ -193,41 +161,19 @@ def get_hparams_from_file(config_path):
   hparams =HParams(**config)
   return hparams
 
-
-def check_git_hash(model_dir):
-  source_dir = os.path.dirname(os.path.realpath(__file__))
-  if not os.path.exists(os.path.join(source_dir, ".git")):
-    logger.warn("{} is not a git repository, therefore hash value comparison will be ignored.".format(
-      source_dir
-    ))
-    return
-
-  cur_hash = subprocess.getoutput("git rev-parse HEAD")
-
-  path = os.path.join(model_dir, "githash")
-  if os.path.exists(path):
-    saved_hash = open(path).read()
-    if saved_hash != cur_hash:
-      logger.warn("git hash values are different. {}(saved) != {}(current)".format(
-        saved_hash[:8], cur_hash[:8]))
-  else:
-    open(path, "w").write(cur_hash)
-
-
 def get_logger(model_dir, filename="train.log"):
   global logger
   logger = logging.getLogger(os.path.basename(model_dir))
-  logger.setLevel(logging.DEBUG)
+  logger.setLevel(logging.INFO)
   
   formatter = logging.Formatter("%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s")
   if not os.path.exists(model_dir):
     os.makedirs(model_dir)
   h = logging.FileHandler(os.path.join(model_dir, filename))
-  h.setLevel(logging.DEBUG)
+  h.setLevel(logging.INFO)
   h.setFormatter(formatter)
   logger.addHandler(h)
   return logger
-
 
 class HParams():
   def __init__(self, **kwargs):

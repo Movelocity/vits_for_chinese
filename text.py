@@ -46,15 +46,21 @@ _anno_map = {
     "!": "！",
     "?": "？"
 }
+
+_drop_chars = ['"', '“', '”', '：', ':', '+', '-', '*', '#', '@']
+
 def multianno_cleaner(phonemes):
+    cleaned_phonemes = []
     for i, p in enumerate(phonemes):
         if p[0] in _anno_map.keys():
             phonemes[i] = _anno_map[p[0]] # 替换英文标点
         for s in _anno_map.values():
             if s in phonemes[i] and len(phonemes[i])>1:
-                # 多个符号相邻，取第一个
-                phonemes[i] = s
-    return phonemes
+                phonemes[i] = s # 多个符号相邻，取第一个
+                break
+        if phonemes[i] not in _drop_chars: # 最后考虑要不要保留
+            cleaned_phonemes.append(phonemes[i])
+    return cleaned_phonemes
 
 # TODO: 阿拉伯数字转汉字。现阶段需手动修改数据集
 def number_cleaner(phonemes):

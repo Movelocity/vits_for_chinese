@@ -1,7 +1,7 @@
 {
   "train": {                  关于训练的配置
-    "log_interval": 2000,     隔多少步记录一次产生一条记录
-    "eval_interval": 10000,   隔多少步保存一次模型权重
+    "log_interval": 2000,     隔多少epoch记录一次产生一条记录
+    "eval_interval": 10000,   隔多少epoch保存一次模型权重
     "seed": 1234,             指定随机种子
     "epochs": 20000,          最大迭代轮数
     "learning_rate": 2e-4,    学习率，如果使用预训练过的模型，使用2e-5或更小。2e-5表示0.00002
