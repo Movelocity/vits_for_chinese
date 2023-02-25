@@ -5,8 +5,11 @@ Copied from this repo: https://github.com/jaywalnut310/vits
 ### 2023-02-25 更新日志
 ```
 1.加入 python 版本检查，只能使用 python3，防止出现意料之外的错误
+
 2.检查多个依赖包并自动安装
+
 3.不用手动编译 monotonic_align，现在由程序自动编译，具体代码在 utils.py
+
 4.合并了 train_single_card.py 和 trian.py，统一用 train.py
 ```
 
