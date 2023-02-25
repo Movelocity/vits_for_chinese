@@ -4,9 +4,7 @@ import sys
 import logging
 import json
 import numpy as np
-import torch
 import shutil
-
 
 MATPLOTLIB_FLAG = False
 
@@ -84,6 +82,7 @@ def prepare_env():
 
 prepare_env()
 
+import torch
 def load_model(model, saved_state_dict):
     state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
     new_state_dict= {}
