@@ -113,17 +113,21 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
 
-    load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
-    load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
-    
-    # TODO: 加上try except, 如果读取不到就不读, 使用原来的随机初始化版本
-    optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
-    optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
+    try:
+        load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
+        load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
+        
+        # TODO: 加上try except, 如果读取不到就不读, 使用原来的随机初始化版本
+        optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
+        optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
 
-    info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
-    learning_rate, epoch = info['learning_rate'], info['epoch']
-    logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
-    return lr, epoch
+        info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
+        learning_rate, epoch = info['learning_rate'], info['epoch']
+        logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
+        return lr, epoch
+    except:
+        print('ckpt not loaded.')
+        return hps.train.learning_rate, 1
 
 def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_dir):
     """
