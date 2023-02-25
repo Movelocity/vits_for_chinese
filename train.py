@@ -1,27 +1,25 @@
+
 import os
 import json
 import argparse
 import itertools
 import math
+
+import utils
+import commons
+
 import torch
 from torch import nn, optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-import torch.multiprocessing as mp
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.cuda.amp import autocast, GradScaler
 
-# 整合原先的train.py和train_ms.py
-# 单个speaker时，默认speaker_id=0
-
-import commons
-import utils
 from data_utils import (
     TextAudioSpeakerLoader,
     TextAudioSpeakerCollate,
-    DistributedBucketSampler
+    DistributedBucketSampler,
+    load_filepaths_and_text
 )
 from models import (
     SynthesizerTrn,
@@ -37,61 +35,32 @@ from mel_processing import mel_spectrogram_torch, spec_to_mel_torch
 import text
 
 torch.backends.cudnn.benchmark = True
-global_step = 0
 
-
-def main():
-    """Assume Single Node Multi GPUs Training Only"""
-    assert torch.cuda.is_available(), "CPU training is not allowed."
-
-    n_gpus = torch.cuda.device_count()
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '7860'
-
-    hps = utils.get_hparams()
-    mp.spawn(run, nprocs=n_gpus, args=(n_gpus, hps,))
-
-
-def run(rank, n_gpus, hps):
-    global global_step
-    if rank == 0:
-        logger = utils.get_logger(hps.model_dir)
-        logger.info(hps)
-        # utils.check_git_hash(hps.model_dir)
-        writer = SummaryWriter(log_dir=hps.model_dir)
-        writer_eval = SummaryWriter(
-            log_dir=os.path.join(hps.model_dir, "eval"))
-
-    dist.init_process_group(
-        backend='nccl', init_method='env://', world_size=n_gpus, rank=rank)
-    torch.manual_seed(hps.train.seed)
-    torch.cuda.set_device(rank)
+def train(hps):
+    logger = utils.get_logger(hps.model_dir)
+    logger.info(hps)
+    # utils.check_git_hash(hps.model_dir)
+    writer = SummaryWriter(log_dir=hps.model_dir)
+    writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
     train_sampler = DistributedBucketSampler(
         train_dataset,
         hps.train.batch_size,
         [32, 300, 400, 500, 600, 700, 800, 900, 1000],
-        num_replicas=n_gpus,
-        rank=rank,
+        num_replicas=1,
+        rank=0,
         shuffle=True)
     collate_fn = TextAudioSpeakerCollate()
-    train_loader = DataLoader(train_dataset, num_workers=6, shuffle=False, pin_memory=True,
+    train_loader = DataLoader(train_dataset, num_workers=2, shuffle=False, pin_memory=True,
                               collate_fn=collate_fn, batch_sampler=train_sampler)
-    if rank == 0:
-        eval_dataset = TextAudioSpeakerLoader(
-            hps.data.validation_files, hps.data)
-        eval_loader = DataLoader(eval_dataset, num_workers=6, shuffle=False,
-                                 batch_size=hps.train.batch_size, pin_memory=True,
-                                 drop_last=False, collate_fn=collate_fn)
-
+    
     net_g = SynthesizerTrn(
         len(text.symbols),
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
-        n_speakers=hps.data.n_speakers,
-        **hps.model).cuda(rank)
-    net_d = MultiPeriodDiscriminator(hps.model.use_spectral_norm).cuda(rank)
+        **hps.model).cuda()
+    net_d = MultiPeriodDiscriminator(hps.model.use_spectral_norm).cuda()
     optim_g = torch.optim.AdamW(
         net_g.parameters(),
         hps.train.learning_rate,
@@ -102,219 +71,133 @@ def run(rank, n_gpus, hps):
         hps.train.learning_rate,
         betas=hps.train.betas,
         eps=hps.train.eps)
-    net_g = DDP(net_g, device_ids=[rank])
-    net_d = DDP(net_d, device_ids=[rank])
 
-    try:
-        _, _, _, epoch_str = utils.load_checkpoint(
-            utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g)
-        _, _, _, epoch_str = utils.load_checkpoint(
-            utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d, optim_d)
-        # 如果继续训练时，数据集大小变了，那计算的global step就不准
-        global_step = (epoch_str - 1) * len(train_loader)
-        print(f"epoch str: {epoch_str}, global step: {global_step}")
-    except:
-        epoch_str = 1  # 后面记得去掉这行，顺便try里面恢复optim的读取
-        global_step = 0
+    lr, epoch_start = utils.load_checkpoint(net_g, optim_g, net_d, optim_d, hps)
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-        optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str-2)
+        optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_start-2)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-        optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str-2)
+        optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_start-2)
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
-    for epoch in range(epoch_str, hps.train.epochs + 1):
-        if rank == 0:
-            train_and_evaluate(rank, epoch, hps, [net_g, net_d], [optim_g, optim_d], [
-                               scheduler_g, scheduler_d], scaler, [train_loader, eval_loader], logger, [writer, writer_eval])
-        else:
-            train_and_evaluate(rank, epoch, hps, [net_g, net_d], [optim_g, optim_d], [
-                               scheduler_g, scheduler_d], scaler, [train_loader, None], None, None)
+    for epoch in range(epoch_start, hps.train.epochs + 1):
+        train_and_evaluate(0, epoch, hps, [net_g, net_d], 
+                [optim_g, optim_d], [scheduler_g, scheduler_d], 
+                scaler, train_loader, logger, [writer, writer_eval])
         scheduler_g.step()
         scheduler_d.step()
-
 
 def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loaders, logger, writers):
     net_g, net_d = nets
     optim_g, optim_d = optims
     scheduler_g, scheduler_d = schedulers
-    train_loader, eval_loader = loaders
-    if writers is not None:
-        writer, writer_eval = writers
+    train_loader = loaders
+    if writers is not None: writer, writer_eval = writers
 
     train_loader.batch_sampler.set_epoch(epoch)
-    global global_step
-
+    
     net_g.train()
     net_d.train()
     for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths, speakers) in enumerate(train_loader):
-        x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(
-            rank, non_blocking=True)
-        spec, spec_lengths = spec.cuda(
-            rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
-        y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(
-            rank, non_blocking=True)
+        x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(rank, non_blocking=True)
+        spec, spec_lengths = spec.cuda(rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
+        y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(rank, non_blocking=True)
         speakers = speakers.cuda(rank, non_blocking=True)
 
         with autocast(enabled=hps.train.fp16_run):
             y_hat, l_length, attn, ids_slice, x_mask, z_mask,\
-                (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(
-                    x, x_lengths, spec, spec_lengths, speakers)
+                (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, spec, spec_lengths, speakers)
 
-            mel = spec_to_mel_torch(
-                spec,
-                hps.data.filter_length,
-                hps.data.n_mel_channels,
-                hps.data.sampling_rate,
-                hps.data.mel_fmin,
-                hps.data.mel_fmax)
-            y_mel = commons.slice_segments(
-                mel, ids_slice, hps.train.segment_size // hps.data.hop_length)
-            y_hat_mel = mel_spectrogram_torch(  # y_hat已经过slice
-                y_hat.squeeze(1),
-                hps.data.filter_length,
-                hps.data.n_mel_channels,
-                hps.data.sampling_rate,
-                hps.data.hop_length,
-                hps.data.win_length,
-                hps.data.mel_fmin,
-                hps.data.mel_fmax
-            )
+            mel = spec_to_mel_torch(spec, config=hps.data)
+            y_mel = commons.slice_segments(mel, ids_slice, hps.train.segment_size//hps.data.hop_length)
+            y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1), config=hps.data)
 
-            y = commons.slice_segments(
-                y, ids_slice * hps.data.hop_length, hps.train.segment_size)  # slice
-
+            y = commons.slice_segments(y, ids_slice * hps.data.hop_length, hps.train.segment_size)  # slice
             # Discriminator
             y_d_hat_r, y_d_hat_g, _, _ = net_d(y, y_hat.detach())
             with autocast(enabled=False):
-                loss_disc, losses_disc_r, losses_disc_g = discriminator_loss(
-                    y_d_hat_r, y_d_hat_g)
-                loss_disc_all = loss_disc
+                loss_disc_all, losses_disc_r, losses_disc_g = discriminator_loss(y_d_hat_r, y_d_hat_g)
+
         optim_d.zero_grad()
         scaler.scale(loss_disc_all).backward()
         scaler.unscale_(optim_d)
-        grad_norm_d = commons.clip_grad_value_(net_d.parameters(), None)
+        grad_norm_d = commons.clip_grad_value_(net_d.parameters(), clip_value=None) # 裁剪值None，仅计算和记录, 不产生其它效应
         scaler.step(optim_d)
 
         with autocast(enabled=hps.train.fp16_run):
             # Generator
             y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = net_d(y, y_hat)
             with autocast(enabled=False):
-                loss_dur = torch.sum(l_length.float())
-                loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel
-                loss_kl = kl_loss(z_p, logs_q, m_p, logs_p,
-                                  z_mask) * hps.train.c_kl
+                loss_dur = torch.sum(l_length.float())  # panelty on the total time of the result
+                loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel  # 频谱图之间计算损失
+                loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * hps.train.c_kl  # 文本编码对齐语音VAE的中间值
 
-                loss_fm = feature_loss(fmap_r, fmap_g)
-                loss_gen, losses_gen = generator_loss(y_d_hat_g)
-                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_dur + loss_kl
+                loss_fm = feature_loss(fmap_r, fmap_g)  # 真假数据在判别器模块内的feature map应尽量靠近
+                loss_gen, losses_gen = generator_loss(y_d_hat_g)  # 每个值尽量靠近1
+                loss_gen_all = loss_gen + loss_fm + loss_kl + loss_mel + loss_dur
         optim_g.zero_grad()
         scaler.scale(loss_gen_all).backward()
         scaler.unscale_(optim_g)
-        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), None)
+        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), clip_value=None)  # 裁剪值None，仅计算和记录, 不产生其它效应
         scaler.step(optim_g)
         scaler.update()
 
-        if rank == 0:
-            if global_step % hps.train.log_interval == 0:
-                lr = optim_g.param_groups[0]['lr']
-                losses = [loss_disc, loss_gen, loss_fm,
-                          loss_mel, loss_dur, loss_kl]
-                # logger.info([global_step, lr])  # 这里可以看到loss [x.item() for x in losses], global_step, 学习率
+    if epoch % hps.train.log_interval == 0:
+        # 将训练记录写入tensorboard，
+        # 若服务器无法开启查看端口，训练完后可将记录下载到本地查看
+        lr = optim_g.param_groups[0]['lr']
+        scalar_dict = {
+            "info/grad_norm_d": grad_norm_d, 
+            "info/grad_norm_g": grad_norm_g,
+            "info/learning_rate": lr, 
+            "loss/loss_gen_all": loss_gen_all, 
+            "loss/loss_disc_all": loss_disc_all,  # 记录判别器损失，可以知道训练有没有崩掉
+            "loss/g/dur": loss_dur, 
+            "loss/g/mel": loss_mel,
+            "loss/g/kl": loss_kl,
+            "loss/g/fm": loss_fm, 
+        }
+        scalar_dict.update(
+            {"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)})
+        scalar_dict.update(
+            {"loss/disc_r/{}".format(i): v for i, v in enumerate(losses_disc_r)})
+        scalar_dict.update(
+            {"loss/disc_g/{}".format(i): v for i, v in enumerate(losses_disc_g)})
 
-                scalar_dict = {"loss/g/total": loss_gen_all, "loss/d/total": loss_disc_all,
-                               "learning_rate": lr, "grad_norm_d": grad_norm_d, "grad_norm_g": grad_norm_g}
-                scalar_dict.update({"loss/g/fm": loss_fm, "loss/g/mel": loss_mel,
-                                   "loss/g/dur": loss_dur, "loss/g/kl": loss_kl})
+        image_dict = {
+            "sliced/mel_orgin": utils.plot_spectrogram_to_numpy(y_mel[0].data.cpu().numpy()),
+            "sliced/mel_generated": utils.plot_spectrogram_to_numpy(y_hat_mel[0].data.cpu().numpy()),
+            "complete/mel": utils.plot_spectrogram_to_numpy(mel[0].data.cpu().numpy()),
+            "complete/alignment": utils.plot_alignment_to_numpy(attn[0, 0].data.cpu().numpy())
+        }
 
-                scalar_dict.update(
-                    {"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)})
-                scalar_dict.update(
-                    {"loss/d_r/{}".format(i): v for i, v in enumerate(losses_disc_r)})
-                scalar_dict.update(
-                    {"loss/d_g/{}".format(i): v for i, v in enumerate(losses_disc_g)})
-                image_dict = {
-                    "slice/mel_org": utils.plot_spectrogram_to_numpy(y_mel[0].data.cpu().numpy()),
-                    "slice/mel_gen": utils.plot_spectrogram_to_numpy(y_hat_mel[0].data.cpu().numpy()),
-                    "all/mel": utils.plot_spectrogram_to_numpy(mel[0].data.cpu().numpy()),
-                    "all/attn": utils.plot_alignment_to_numpy(attn[0, 0].data.cpu().numpy())
-                }
-                utils.summarize(
-                    writer=writer,
-                    global_step=global_step,
-                    images=image_dict,
-                    scalars=scalar_dict)
+        # 写入tensorboard日志
+        utils.summarize(writer=writer, global_step=epoch, images=image_dict, scalars=scalar_dict)
 
-            if global_step % hps.train.eval_interval == 0:
-                evaluate(hps, net_g, eval_loader, writer_eval)
-                utils.save_checkpoint(net_g, optim_g, hps.train.learning_rate, epoch, os.path.join(
-                    hps.model_dir, "G_{}.pth".format(global_step)))
-                utils.save_checkpoint(net_d, optim_d, hps.train.learning_rate, epoch, os.path.join(
-                    hps.model_dir, "D_{}.pth".format(global_step)))
-        global_step += 1
+    if epoch % hps.train.eval_interval == 1:
+        evaluate(hps, net_g, writer_eval, epoch)
+        utils.save_checkpoint(net_g, optim_g, net_d, optim_d, hps.train.learning_rate, epoch, hps.model_dir)
 
-    if rank == 0:
-        logger.info('====> Epoch: {}'.format(epoch))
+    print('====> Epoch: {}'.format(epoch))
 
-
-def evaluate(hps, generator, eval_loader, writer_eval):
+@torch.no_grad()
+def evaluate(hps, generator, writer_eval, epoch):
     generator.eval()
-    with torch.no_grad():
-        for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths, speakers) in enumerate(eval_loader):
-            x, x_lengths = x.cuda(0), x_lengths.cuda(0)
-            spec, spec_lengths = spec.cuda(0), spec_lengths.cuda(0)
-            y, y_lengths = y.cuda(0), y_lengths.cuda(0)
-            speakers = speakers.cuda(0)
+    eval_data = load_filepaths_and_text(hps.data.validation_files)[:4]
 
-            # remove else
-            x = x[:1]
-            x_lengths = x_lengths[:1]
-            spec = spec[:1]
-            spec_lengths = spec_lengths[:1]
-            y = y[:1]
-            y_lengths = y_lengths[:1]
-            speakers = speakers[:1]
-            break
-
-        results = generator.module.infer(x, x_lengths, speakers, max_len=1000)
-        
-        y_hat, attn, mask = results[0], results[1], results[2]
-
-        y_hat_lengths = mask.sum([1, 2]).long() * hps.data.hop_length
-
-        mel = spec_to_mel_torch(
-            spec,
-            hps.data.filter_length,
-            hps.data.n_mel_channels,
-            hps.data.sampling_rate,
-            hps.data.mel_fmin,
-            hps.data.mel_fmax)
-        y_hat_mel = mel_spectrogram_torch(
-            y_hat.squeeze(1).float(),
-            hps.data.filter_length,
-            hps.data.n_mel_channels,
-            hps.data.sampling_rate,
-            hps.data.hop_length,
-            hps.data.win_length,
-            hps.data.mel_fmin,
-            hps.data.mel_fmax
-        )
-    image_dict = {
-        "gen/mel": utils.plot_spectrogram_to_numpy(y_hat_mel[0].cpu().numpy())
-    }
-    audio_dict = {
-        "gen/audio": y_hat[0, :, :y_hat_lengths[0]]
-    }
-    if global_step == 0:
-        image_dict.update(
-            {"gt/mel": utils.plot_spectrogram_to_numpy(mel[0].cpu().numpy())})
-        audio_dict.update({"gt/audio": y[0, :, :y_lengths[0]]})
+    audio_dict = {}
+    for i, data in enumerate(eval_data):
+        phonemes = text.pypinyin_g2p_phone(data[-1])
+        input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).cuda()
+        input_lengths = torch.LongTensor([input_ids.size(1)]).cuda()
+        sid = torch.LongTensor([int(data[1])]).cuda()
+        audio = generator.infer(input_ids, input_lengths, sid=sid)[0]
+        audio_dict.update({str(i): audio[0, :, :]})
 
     utils.summarize(
         writer=writer_eval,
-        global_step=global_step,
-        images=image_dict,
+        global_step=epoch,
         audios=audio_dict,
         audio_sampling_rate=hps.data.sampling_rate
     )
@@ -322,4 +205,17 @@ def evaluate(hps, generator, eval_loader, writer_eval):
 
 
 if __name__ == "__main__":
-    main()
+    # Assume Single Node Multi GPUs Training Only
+    assert torch.cuda.is_available(), "CPU training is not allowed."
+
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, default="./configs/config.json",
+                      help='JSON file for configuration')
+    parser.add_argument('-m', '--model', type=str, default="model",
+                      help='Model name')
+    args = parser.parse_args()
+    hps = utils.get_hparams(args)  # 已创建logs文件夹
+
+    print("-------- running ---------")
+    train(hps)
