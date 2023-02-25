@@ -153,7 +153,7 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
         'optim_g': optim_g,
         'optim_d': optim_d
     }
-    for k, v in savelist.iteritems():
+    for k, v in savelist.items():
         torch.save(v, os.path.join(checkpoint_folder, k))
 
     torch.save({'learning_rate': learning_rate, 'epoch': epoch}, os.path.join(checkpoint_folder, 'info.pt'))
