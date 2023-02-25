@@ -67,12 +67,25 @@ def is_installed(package):
         return False
     return spec is not None
 
+def frp_for_online_tensorboard(frpc_ini, enable=False):
+    if not enable: return
+    # wget https://github.com/fatedier/frp/releases/download/v0.37.0/frp_0.37.0_linux_amd64.tar.gz
+    # tar -zxvf frp_0.37.0_linux_amd64.tar.gz
+    # mv frp_0.37.0_linux_amd64 frp37
+    with open('frp37/frpc.ini', 'w') as f:
+        f.write(frpc_ini)
+        print('配置已写入frpc.ini')
+    run('./frp37/frpc -c ./frp37/frpc.ini >./output.txt 2>&1 &')
+    pass
+
 def prepare_env():
     if not is_installed("torch") or not is_installed("torchaudio"):
         torch_command = "pip install torch==1.13.1+cu117 torchaudio==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
         run(f'"{python}" -m {torch_command}', "Installing torch and torchaudio", "Couldn't install torch", live=True)
     if not is_installed("pypinyin"):
         run_pip(f"install pypinyin", "pypinyin")
+    if not is_installed("matplotlib"):
+        run_pip(f"install matplotlib", "matplotlib")
     if not is_installed("Cython"):
         run_pip(f"install Cython==0.29.21", "Cython")
     if not is_installed("librosa"):
@@ -124,10 +137,12 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
 
     load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
     load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
-    
-    # TODO: 加上try except, 如果读取不到就不读, 使用原来的随机初始化版本
-    optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
-    optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
+
+    try:
+        optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
+        optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
+    except ValueError:
+        print('优化器加载失败，使用随机初始化...')
 
     info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
     learning_rate, epoch = info['learning_rate'], info['epoch']
