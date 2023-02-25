@@ -77,6 +77,13 @@ def prepare_env():
         run_pip(f"install Cython==0.29.21", "Cython")
     if not is_installed("librosa"):
         run_pip(f"install librosa==0.6.0", "librosa")
+
+    try:
+        import monotonic_align.maximum_path
+    except:
+        print('compiling monotonic align')
+        run(f"cd monotonic_align; {python} setup.py build_ext --inplace; cd ..", live=True)
+
     if "--exit" in sys.argv:
         print("Exiting because of --exit argument")
         exit(0)
