@@ -107,9 +107,9 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
             y_hat, l_length, attn, ids_slice, x_mask, z_mask,\
                 (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, spec, spec_lengths, speakers)
 
-            mel = spec_to_mel_torch(spec, hps.data)
+            mel = spec_to_mel_torch(spec, config=hps.data)
             y_mel = commons.slice_segments(mel, ids_slice, hps.train.segment_size//hps.data.hop_length)
-            y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1), hps.data)
+            y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1), config=hps.data)
 
             y = commons.slice_segments(y, ids_slice * hps.data.hop_length, hps.train.segment_size)  # slice
             # Discriminator

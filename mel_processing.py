@@ -64,14 +64,18 @@ def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False)
     spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
     return spec
 
-def spec_to_mel_torch(spec, n_fft=None, num_mels=None, sampling_rate=None, fmin=None, fmax=None, hps_data=None):
+def spec_to_mel_torch(spec, n_fft=None, num_mels=None, sampling_rate=None, fmin=None, fmax=None, config=None):
+    '''
+    现在只支持命名参数输入，请在参数前加上其名
+    例如: n_fft=1024, num_mels=80, config=hps.data
+    '''
     global mel_basis
     if n_fft is None or num_mels is None:
-        n_fft = hps_data.filter_length
-        num_mels = hps_data.n_mel_channels
-        sampling_rate = hps_data.sampling_rate
-        fmin = hps_data.mel_fmin
-        f_max = hps_data.mel_fmax
+        n_fft = config.filter_length
+        num_mels = config.n_mel_channels
+        sampling_rate = config.sampling_rate
+        fmin = config.mel_fmin
+        f_max = config.mel_fmax
     dtype_device = str(spec.dtype) + '_' + str(spec.device)
     fmax_dtype_device = str(fmax) + '_' + dtype_device
     if fmax_dtype_device not in mel_basis:  # 梅尔滤波器只需构造一次
@@ -82,15 +86,19 @@ def spec_to_mel_torch(spec, n_fft=None, num_mels=None, sampling_rate=None, fmin=
     return spec
 
 def mel_spectrogram_torch(y, n_fft=None, num_mels=None, sampling_rate=None,  \
-    hop_size=None, win_size=None, fmin=None, fmax=None, center=False, hps_data=None):
+    hop_size=None, win_size=None, fmin=None, fmax=None, center=False, config=None):
+    '''
+    现在只支持命名参数输入，请在参数前加上其名
+    例如: n_fft=1024, num_mels=80, config=hps.data
+    '''
     if n_fft is None or num_mels is None:
-        n_fft = hps_data.filter_length
-        num_mels = hps_data.n_mel_channels
-        sampling_rate = hps_data.sampling_rate
-        hop_size = hps_data.hop_length
-        win_size = hps_data.win_length
-        fmin = hps_data.mel_fmin
-        fmax = hps_data.mel_fmax
+        n_fft = config.filter_length
+        num_mels = config.n_mel_channels
+        sampling_rate = config.sampling_rate
+        hop_size = config.hop_length
+        win_size = config.win_length
+        fmin = config.mel_fmin
+        fmax = config.mel_fmax
     if torch.min(y) < -1.:
         print('min value is ', torch.min(y))
     if torch.max(y) > 1.:
