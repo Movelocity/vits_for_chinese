@@ -12,7 +12,7 @@
       "lr_decay": 0.97,
       "segment_size": 8192,
       "init_lr_ratio": 1,
-      "warmup_epochs": 0,
+      "warmup_epochs": 5,
       "c_mel": 45,
       "c_kl": 1.0
     },
@@ -28,7 +28,7 @@
       "mel_fmin": 0.0,
       "mel_fmax": null,
       "add_blank": false,
-      "n_speakers": 1
+      "n_speakers": 1024
     },
     "model": {
       "inter_channels": 192,

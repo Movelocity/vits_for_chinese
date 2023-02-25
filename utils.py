@@ -3,10 +3,10 @@ import glob
 import sys
 import logging
 import json
-import subprocess
 import numpy as np
-from scipy.io.wavfile import read
 import torch
+import shutil
+
 
 MATPLOTLIB_FLAG = False
 
@@ -15,44 +15,154 @@ logger = logging
 
 logging.getLogger("matplotlib").setLevel(logging.WARNING)
 
-def load_checkpoint(checkpoint_path, model, optimizer=None):
-  assert os.path.isfile(checkpoint_path)
-  checkpoint_dict = torch.load(checkpoint_path, map_location='cpu')
-  iteration = checkpoint_dict['iteration']
-  learning_rate = checkpoint_dict['learning_rate']
-  if optimizer is not None:
-    optimizer.load_state_dict(checkpoint_dict['optimizer'])
-  saved_state_dict = checkpoint_dict['model']
-  if hasattr(model, 'module'):
-    state_dict = model.module.state_dict()
-  else:
-    state_dict = model.state_dict()
-  new_state_dict= {}
-  for k, v in state_dict.items():
+def check_py_version():
+    if sys.version_info.major != 3:
+        print("""
+请使用 Python3
+如果使用 sudo python train.py ... 运行程序, 大概率用的是python2, 试一下 sudo python3 train.py
+其它情况请在命令行使用 python --version 检查版本
+""")
+
+# Copied from https://github.com/AUTOMATIC1111/stable-diffusion-webui/blob/master/launch.py
+def run(command, desc=None, errdesc=None, custom_env=None, live=False):
+    """执行命令"""
+    if desc is not None:
+        print(desc)
+
+    if live:
+        result = subprocess.run(command, shell=True, env=os.environ if custom_env is None else custom_env)
+        if result.returncode != 0:
+            raise RuntimeError(f"""{errdesc or 'Error running command'}.
+Command: {command}
+Error code: {result.returncode}""")
+        return ""
+
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=os.environ if custom_env is None else custom_env)
+
+    if result.returncode != 0:
+        message = f"""{errdesc or 'Error running command'}.
+Command: {command}
+Error code: {result.returncode}
+stdout: {result.stdout.decode(encoding="utf8", errors="ignore") if len(result.stdout)>0 else '<empty>'}
+stderr: {result.stderr.decode(encoding="utf8", errors="ignore") if len(result.stderr)>0 else '<empty>'}
+"""
+        raise RuntimeError(message)
+
+    return result.stdout.decode(encoding="utf8", errors="ignore")
+
+python = sys.executable
+def run_python(code, desc=None, errdesc=None):
+    return run(f'"{python}" -c "{code}"', desc, errdesc)
+
+index_url = os.environ.get('INDEX_URL', "")
+def run_pip(args, desc=None):
+    if skip_install: return
+    index_url_line = f' --index-url {index_url}' if index_url != '' else ''
+    return run(f'"{python}" -m pip {args} --prefer-binary{index_url_line}', 
+        desc=f"Installing {desc}", errdesc=f"Couldn't install {desc}")
+
+def is_installed(package):
     try:
-      new_state_dict[k] = saved_state_dict[k]
-    except:
-      logger.info("%s is not in the checkpoint" % k)
-      new_state_dict[k] = v
-  if hasattr(model, 'module'):
-    model.module.load_state_dict(new_state_dict, strict=False)
-  else:
-    model.load_state_dict(new_state_dict, strict=False)
-  logger.info("Loaded checkpoint '{}' (iteration {})" .format(checkpoint_path, iteration))
-  return model, optimizer, learning_rate, iteration
+        spec = importlib.util.find_spec(package)
+    except ModuleNotFoundError:
+        return False
+    return spec is not None
 
+def prepare_env():
+    if not is_installed("torch") or not is_installed("torchaudio"):
+        torch_command = "pip install torch==1.13.1+cu117 torchaudio==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
+        run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
+    if not is_installed("pypinyin"):
+        run_pip(f"install pypinyin", "pypinyin")
+    if not is_installed("Cython"):
+        run_pip(f"install Cython==0.29.21", "Cython")
+    if not is_installed("librosa"):
+        run_pip(f"install librosa==0.6.0", "librosa")
+    if "--exit" in sys.argv:
+        print("Exiting because of --exit argument")
+        exit(0)
 
-def save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path):
-  logger.info("Saving model and optimizer state at iteration {} to {}".format(
-    iteration, checkpoint_path))
-  if hasattr(model, 'module'):
-    state_dict = model.module.state_dict()
-  else:
-    state_dict = model.state_dict()
-  torch.save({'model': state_dict,
-              'iteration': iteration,
-              'optimizer': optimizer.state_dict(),
-              'learning_rate': learning_rate}, checkpoint_path)
+def load_model(model, saved_state_dict):
+    state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
+    new_state_dict= {}
+    for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
+        try:
+            new_state_dict[k] = saved_state_dict[k]
+        except:
+            logger.info(f"{k} 预训练权重和当前配置不匹配，使用默认权重.")
+            new_state_dict[k] = v
+
+    if hasattr(model, 'module'):
+        model.module.load_state_dict(new_state_dict)
+    else:
+        model.load_state_dict(new_state_dict)
+
+# TODO: 下载共享的预训练权重
+def from_pretrained(model, link):
+    pass
+
+def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
+    model_dir = hps.model_dir
+    folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
+    if len(folders) == 0:
+        return hps.train.learning_rate, 1
+        # TODO: 下载预训练权重
+        ckpt_folder = os.path.join(model_dir, 'epoch_0')
+        os.mkdir(ckpt_folder)
+    else:
+        folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
+        ckpt_folder = folders[-1]
+
+    load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
+    load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
+    
+    # TODO: 加上try except, 如果读取不到就不读, 使用原来的随机初始化版本
+    optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
+    optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
+
+    info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
+    learning_rate, epoch = info['learning_rate'], info['epoch']
+    logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
+    return lr, epoch
+
+def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_dir):
+    """
+    保存训练状态, 默认保留最新的两个epoch文件夹, 旧的直接删去
+    
+    保留两个是为了防止模型进入过拟合状态，
+    
+    感觉模型过拟合的时候，可以手动删掉过拟合的文件夹，然后重新启动训练
+    """
+    checkpoint_folder = os.path.join(model_dir, f'epoch_{epoch}')
+
+    logger.info("Saving ckpt to {}".format(checkpoint_folder))
+
+    g_state_dict = net_g.module.state_dict() if hasattr(net_g, 'module') else net_g.state_dict()
+    d_state_dict = net_d.module.state_dict() if hasattr(net_d, 'module') else net_d.state_dict()
+
+    if not os.path.exists(checkpoint_folder):
+        os.makedirs(checkpoint_folder)
+
+    torch.save(os.path.join(checkpoint_folder, "model.ckpt"))
+
+    savelist = {
+        'generator.ckpt': g_state_dict, 
+        'discriminator.ckpt': d_state_dict,
+        'optim_g': optim_g,
+        'optim_d': optim_d
+    }
+    for k, v in savelist.iteritems():
+        torch.save(v, os.path.join(checkpoint_folder, k))
+
+    torch.save({'learning_rate': learning_rate, 'epoch': epoch}, os.path.join(checkpoint_folder, 'info.pt'))
+
+    # 删除旧的检查点
+    folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
+    folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
+    if len(folders) > 2:
+        shutil.rmtree(folders[0])    #递归删除文件夹
+        logger.info(f'remove old ckpts: {folders[0]}')
+
 
 def summarize(writer, global_step, scalars={}, histograms={}, images={}, audios={}, audio_sampling_rate=22050):
   for k, v in scalars.items():
@@ -63,14 +173,6 @@ def summarize(writer, global_step, scalars={}, histograms={}, images={}, audios=
     writer.add_image(k, v, global_step, dataformats='HWC')
   for k, v in audios.items():
     writer.add_audio(k, v, global_step, audio_sampling_rate)
-
-def latest_checkpoint_path(dir_path, regex="G_*.pth"):
-  """找出最新的模型并返回其路径"""
-  f_list = glob.glob(os.path.join(dir_path, regex))
-  f_list.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
-  x = f_list[-1]
-  print(x)
-  return x
 
 def plot_spectrogram_to_numpy(spectrogram):
   global MATPLOTLIB_FLAG

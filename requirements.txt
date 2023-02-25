@@ -1,7 +1,5 @@
 Cython==0.29.21
 librosa==0.6.0
-scipy==1.5.2
 tensorboard==2.3.0
 Unidecode==1.1.1
 pypinyin
-pyyaml

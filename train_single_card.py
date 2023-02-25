@@ -70,13 +70,7 @@ def train(hps):
         betas=hps.train.betas,
         eps=hps.train.eps)
 
-    try:
-        _, _, _, epoch_str = utils.load_checkpoint(
-            utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g, optim_g)
-        _, _, _, epoch_str = utils.load_checkpoint(
-            utils.latest_checkpoint_path(hps.model_dir, "D_*.pth"), net_d, optim_d)
-    except:
-        epoch_str = 1
+    lr, epoch_start = utils.load_checkpoint(net_g, optim_g, net_d, optim_d, hps)
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
         optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str-2)
@@ -85,9 +79,10 @@ def train(hps):
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
-    for epoch in range(epoch_str, hps.train.epochs + 1):
-        train_and_evaluate(0, epoch, hps, [net_g, net_d], [optim_g, optim_d], [
-                scheduler_g, scheduler_d], scaler, train_loader, logger, [writer, writer_eval])
+    for epoch in range(epoch_start, hps.train.epochs + 1):
+        train_and_evaluate(0, epoch, hps, [net_g, net_d], 
+                [optim_g, optim_d], [scheduler_g, scheduler_d], 
+                scaler, train_loader, logger, [writer, writer_eval])
         scheduler_g.step()
         scheduler_d.step()
 
@@ -96,8 +91,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
     optim_g, optim_d = optims
     scheduler_g, scheduler_d = schedulers
     train_loader = loaders
-    if writers is not None:
-        writer, writer_eval = writers
+    if writers is not None: writer, writer_eval = writers
 
     train_loader.batch_sampler.set_epoch(epoch)
     
@@ -111,79 +105,57 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 
         with autocast(enabled=hps.train.fp16_run):
             y_hat, l_length, attn, ids_slice, x_mask, z_mask,\
-                (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(
-                    x, x_lengths, spec, spec_lengths, speakers)
+                (z, z_p, m_p, logs_p, m_q, logs_q) = net_g(x, x_lengths, spec, spec_lengths, speakers)
 
-            mel = spec_to_mel_torch(
-                spec,
-                hps.data.filter_length,
-                hps.data.n_mel_channels,
-                hps.data.sampling_rate,
-                hps.data.mel_fmin,
-                hps.data.mel_fmax)
-            y_mel = commons.slice_segments(
-                mel, ids_slice, hps.train.segment_size // hps.data.hop_length)
-            y_hat_mel = mel_spectrogram_torch(
-                y_hat.squeeze(1),
-                hps.data.filter_length,
-                hps.data.n_mel_channels,
-                hps.data.sampling_rate,
-                hps.data.hop_length,
-                hps.data.win_length,
-                hps.data.mel_fmin,
-                hps.data.mel_fmax
-            )
+            mel = spec_to_mel_torch(spec, hps.data)
+            y_mel = commons.slice_segments(mel, ids_slice, hps.train.segment_size//hps.data.hop_length)
+            y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1), hps.data)
 
-            y = commons.slice_segments(
-                y, ids_slice * hps.data.hop_length, hps.train.segment_size)  # slice
-
+            y = commons.slice_segments(y, ids_slice * hps.data.hop_length, hps.train.segment_size)  # slice
             # Discriminator
             y_d_hat_r, y_d_hat_g, _, _ = net_d(y, y_hat.detach())
             with autocast(enabled=False):
-                loss_disc, losses_disc_r, losses_disc_g = discriminator_loss(
-                    y_d_hat_r, y_d_hat_g)
-                loss_disc_all = loss_disc
+                loss_disc_all, losses_disc_r, losses_disc_g = discriminator_loss(y_d_hat_r, y_d_hat_g)
+
         optim_d.zero_grad()
         scaler.scale(loss_disc_all).backward()
         scaler.unscale_(optim_d)
-        grad_norm_d = commons.clip_grad_value_(net_d.parameters(), None)
+        grad_norm_d = commons.clip_grad_value_(net_d.parameters(), clip_value=None) # 裁剪值None，仅计算和记录, 不产生其它效应
         scaler.step(optim_d)
 
         with autocast(enabled=hps.train.fp16_run):
             # Generator
             y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = net_d(y, y_hat)
             with autocast(enabled=False):
-                loss_dur = torch.sum(l_length.float())
-                loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel
-                loss_kl = kl_loss(z_p, logs_q, m_p, logs_p,
-                                  z_mask) * hps.train.c_kl
+                loss_dur = torch.sum(l_length.float())  # panelty on the total time of the result
+                loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel  # 频谱图之间计算损失
+                loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * hps.train.c_kl  # 文本编码对齐语音VAE的中间值
 
-                loss_fm = feature_loss(fmap_r, fmap_g)
-                loss_gen, losses_gen = generator_loss(y_d_hat_g)
-                loss_gen_all = loss_gen + loss_fm + loss_mel + loss_dur + loss_kl
+                loss_fm = feature_loss(fmap_r, fmap_g)  # 真假数据在判别器模块内的feature map应尽量靠近
+                loss_gen, losses_gen = generator_loss(y_d_hat_g)  # 每个值尽量靠近1
+                loss_gen_all = loss_gen + loss_fm + loss_kl + loss_mel + loss_dur
         optim_g.zero_grad()
         scaler.scale(loss_gen_all).backward()
         scaler.unscale_(optim_g)
-        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), None)
+        grad_norm_g = commons.clip_grad_value_(net_g.parameters(), clip_value=None)  # 裁剪值None，仅计算和记录, 不产生其它效应
         scaler.step(optim_g)
         scaler.update()
 
-    if epoch % hps.train.log_interval == 0:  # 记录模型损失值
+    if epoch % hps.train.log_interval == 0:
+        # 将训练记录写入tensorboard，
+        # 若服务器无法开启查看端口，训练完后可将记录下载到本地查看
         lr = optim_g.param_groups[0]['lr']
-        losses = [loss_disc, loss_gen, loss_fm, loss_mel, loss_dur, loss_kl]
-
         scalar_dict = {
+            "info/grad_norm_d": grad_norm_d, 
+            "info/grad_norm_g": grad_norm_g,
+            "info/learning_rate": lr, 
             "loss/loss_gen_all": loss_gen_all, 
-            "loss/loss_disc_all": loss_disc_all,
-            "learning_rate": lr, 
-            "grad_norm_d": grad_norm_d, 
-            "grad_norm_g": grad_norm_g,
-            "loss/g/fm": loss_fm, 
-            "loss/g/mel": loss_mel,
+            "loss/loss_disc_all": loss_disc_all,  # 记录判别器损失，可以知道训练有没有崩掉
             "loss/g/dur": loss_dur, 
-            "loss/g/kl": loss_kl
+            "loss/g/mel": loss_mel,
+            "loss/g/kl": loss_kl,
+            "loss/g/fm": loss_fm, 
         }
-
         scalar_dict.update(
             {"loss/g/{}".format(i): v for i, v in enumerate(losses_gen)})
         scalar_dict.update(
@@ -198,18 +170,12 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
             "complete/alignment": utils.plot_alignment_to_numpy(attn[0, 0].data.cpu().numpy())
         }
 
-        utils.summarize(
-            writer=writer,
-            global_step=epoch,
-            images=image_dict,
-            scalars=scalar_dict)
+        # 写入tensorboard日志
+        utils.summarize(writer=writer, global_step=epoch, images=image_dict, scalars=scalar_dict)
 
-    if epoch % hps.train.eval_interval == 0:
+    if epoch % hps.train.eval_interval == 1:
         evaluate(hps, net_g, writer_eval, epoch)
-        utils.save_checkpoint(net_g, optim_g, hps.train.learning_rate, epoch, os.path.join(
-            hps.model_dir, "G_{}.pth".format(epoch)))
-        utils.save_checkpoint(net_d, optim_d, hps.train.learning_rate, epoch, os.path.join(
-            hps.model_dir, "D_{}.pth".format(epoch)))
+        utils.save_checkpoint(net_g, optim_g, net_d, optim_d, hps.train.learning_rate, epoch, hps.model_dir)
 
     print('====> Epoch: {}'.format(epoch))
 
@@ -217,16 +183,15 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 def evaluate(hps, generator, writer_eval, epoch):
     generator.eval()
     eval_data = load_filepaths_and_text(hps.data.validation_files)[:4]
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     audio_dict = {}
     for i, data in enumerate(eval_data):
         phonemes = text.pypinyin_g2p_phone(data[-1])
-        input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).to(device)
-        input_lengths = torch.LongTensor([input_ids.size(1)]).to(device)
-        sid = torch.LongTensor([int(data[1])]).to(device)
+        input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).cuda()
+        input_lengths = torch.LongTensor([input_ids.size(1)]).cuda()
+        sid = torch.LongTensor([int(data[1])]).cuda()
         audio = generator.infer(input_ids, input_lengths, sid=sid)[0]
-        audio_dict.update({str(i): audio[0, :, :y_hat_lengths[0]]})
+        audio_dict.update({str(i): audio[0, :, :]})
 
     utils.summarize(
         writer=writer_eval,

@@ -10,14 +10,7 @@ from modules import LayerNorm
 class Encoder(nn.Module):
   def __init__(self, hidden_channels, filter_channels, n_heads, n_layers, kernel_size=1, p_dropout=0., window_size=4, **kwargs):
     super().__init__()
-    # self.hidden_channels = hidden_channels
-    # self.filter_channels = filter_channels
-    # self.n_heads = n_heads
     self.n_layers = n_layers
-    # self.kernel_size = kernel_size
-    # self.p_dropout = p_dropout
-    # self.window_size = window_size
-
     self.drop = nn.Dropout(p_dropout)
     self.attn_layers = nn.ModuleList()
     self.norm_layers_1 = nn.ModuleList()

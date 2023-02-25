@@ -15,7 +15,6 @@ from librosa.filters import mel as librosa_mel_fn
 
 MAX_WAV_VALUE = 32768.0
 
-
 def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
     """
     PARAMS
@@ -23,7 +22,6 @@ def dynamic_range_compression_torch(x, C=1, clip_val=1e-5):
     C: compression factor
     """
     return torch.log(torch.clamp(x, min=clip_val) * C)
-
 
 def dynamic_range_decompression_torch(x, C=1):
     """
@@ -33,11 +31,9 @@ def dynamic_range_decompression_torch(x, C=1):
     """
     return torch.exp(x) / C
 
-
 def spectral_normalize_torch(magnitudes):
     output = dynamic_range_compression_torch(magnitudes)
     return output
-
 
 def spectral_de_normalize_torch(magnitudes):
     output = dynamic_range_decompression_torch(magnitudes)
@@ -46,7 +42,6 @@ def spectral_de_normalize_torch(magnitudes):
 
 mel_basis = {}
 hann_window = {}
-
 
 def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False):
     if torch.min(y) < -1.:
@@ -69,9 +64,14 @@ def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False)
     spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
     return spec
 
-
-def spec_to_mel_torch(spec, n_fft, num_mels, sampling_rate, fmin, fmax):
+def spec_to_mel_torch(spec, n_fft=None, num_mels=None, sampling_rate=None, fmin=None, fmax=None, hps_data=None):
     global mel_basis
+    if n_fft is None or num_mels is None:
+        n_fft = hps_data.filter_length
+        num_mels = hps_data.n_mel_channels
+        sampling_rate = hps_data.sampling_rate
+        fmin = hps_data.mel_fmin
+        f_max = hps_data.mel_fmax
     dtype_device = str(spec.dtype) + '_' + str(spec.device)
     fmax_dtype_device = str(fmax) + '_' + dtype_device
     if fmax_dtype_device not in mel_basis:  # 梅尔滤波器只需构造一次
@@ -81,8 +81,16 @@ def spec_to_mel_torch(spec, n_fft, num_mels, sampling_rate, fmin, fmax):
     spec = spectral_normalize_torch(spec)
     return spec
 
-
-def mel_spectrogram_torch(y, n_fft, num_mels, sampling_rate, hop_size, win_size, fmin, fmax, center=False):
+def mel_spectrogram_torch(y, n_fft=None, num_mels=None, sampling_rate=None,  \
+    hop_size=None, win_size=None, fmin=None, fmax=None, center=False, hps_data=None):
+    if n_fft is None or num_mels is None:
+        n_fft = hps_data.filter_length
+        num_mels = hps_data.n_mel_channels
+        sampling_rate = hps_data.sampling_rate
+        hop_size = hps_data.hop_length
+        win_size = hps_data.win_length
+        fmin = hps_data.mel_fmin
+        fmax = hps_data.mel_fmax
     if torch.min(y) < -1.:
         print('min value is ', torch.min(y))
     if torch.max(y) > 1.:

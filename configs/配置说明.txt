@@ -11,12 +11,12 @@
     "fp16_run": true,         使用混合精度训练，牺牲部分精度加速训练
     "lr_decay": 0.9998,       学习率衰减系数
     "segment_size": 8192,     特殊方法，一个批次里每条语音只取一个片段用于训练，片段大小在这里设置     
-    "warmup_epochs": 0,       用几遍迭代来预热
+    "warmup_epochs": 0,       用几遍迭代来预热，可以防止模型发散
     "c_mel": 45,              计算合成频谱和目标频谱间差异的缩放系数
     "c_kl": 1.0               计算分布之间差异的缩放系数
   },
   "data": {                   关于数据集的属性
-    "training_files":"filelists/mixed.txt.cleaned",     训练用的文件列表，内部格式(文件名|音素)或(文件名|说话者编号|音素)
+    "training_files":"filelists/mixed.txt.cleaned",     训练用的文件列表，内部格式详见 filelists/数据集说明.txt
     "validation_files":"filelists/mixedv.txt.cleaned",  验证训练效果用的，需要一个不在训练集里的文件，一个就够。内部格式同上
     "max_wav_value": 32768.0, 数据集里的波形数据的最大值
     "sampling_rate": 22050,   采样率。人耳能听到的声音频率20~20KHz。
@@ -27,7 +27,7 @@
     "mel_fmin": 0.0,          梅尔频谱的最小频率
     "mel_fmax": null,         梅尔频谱的最大频率
     "add_blank": false,       每个音素之间插空，需要额外一个<blank>符号
-    "n_speakers": 2           说话者的个数，会影响到模型保存的编码个数
+    "n_speakers": 1000        说话者的个数，会影响到模型保存的编码个数。1000条说话者编码占用750kB, 互相不影响
   },
   "model": {
     "inter_channels": 192,    模块之间传递的特征的通道数
