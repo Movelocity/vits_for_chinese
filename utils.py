@@ -113,21 +113,29 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
 
-    try:
-        load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
-        load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
-        
-        # TODO: 加上try except, 如果读取不到就不读, 使用原来的随机初始化版本
-        optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
-        optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
+    load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
+    load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
+    
+    # TODO: 加上try except, 如果读取不到就不读, 使用原来的随机初始化版本
+    optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
+    optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
 
-        info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
-        learning_rate, epoch = info['learning_rate'], info['epoch']
-        logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
-        return lr, epoch
-    except:
-        print('ckpt not loaded.')
-        return hps.train.learning_rate, 1
+    info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
+    learning_rate, epoch = info['learning_rate'], info['epoch']
+    logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
+    return lr, epoch
+
+
+"""
+> ls -hl logs/zh/epoch_10
+/bin/bash: /opt/conda/lib/libtinfo.so.6: no version information available (required by /bin/bash)
+total 1.3G
+-rw-r--r-- 1 root root 179M Feb 25 01:00 discriminator.ckpt
+-rw-r--r-- 1 root root 152M Feb 25 01:00 generator.ckpt
+-rw-r--r-- 1 root root  431 Feb 25 01:00 info.pt
+-rw-r--r-- 1 root root 536M Feb 25 01:00 optim_d
+-rw-r--r-- 1 root root 456M Feb 25 01:00 optim_g
+"""
 
 def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_dir):
     """
@@ -150,8 +158,8 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
     savelist = {
         'generator.ckpt': g_state_dict, 
         'discriminator.ckpt': d_state_dict,
-        'optim_g': optim_g,
-        'optim_d': optim_d
+        'optim_g': optim_g.state_dict(),
+        'optim_d': optim_d.state_dict()
     }
     for k, v in savelist.items():
         torch.save(v, os.path.join(checkpoint_folder, k))
