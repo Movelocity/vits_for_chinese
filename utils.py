@@ -229,8 +229,8 @@ def plot_alignment_to_numpy(alignment, info=None):
 
 import torchaudio
 def load_wav_to_torch(full_path):
-    wav, sr = torchaudio.load(full_path)[0]
-    return torch.FloatTensor(wav), sr
+    wav, sr = torchaudio.load(full_path)
+    return torch.FloatTensor(wav[0]), sr
 
 def get_hparams(args):
     model_dir = os.path.join("./logs", args.model)
