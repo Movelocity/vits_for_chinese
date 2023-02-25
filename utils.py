@@ -143,8 +143,6 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
     if not os.path.exists(checkpoint_folder):
         os.makedirs(checkpoint_folder)
 
-    torch.save(os.path.join(checkpoint_folder, "model.ckpt"))
-
     savelist = {
         'generator.ckpt': g_state_dict, 
         'discriminator.ckpt': d_state_dict,
