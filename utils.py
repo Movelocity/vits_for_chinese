@@ -6,6 +6,7 @@ import json
 import numpy as np
 import shutil
 import importlib
+import subprocess
 
 MATPLOTLIB_FLAG = False
 
