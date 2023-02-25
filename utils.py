@@ -123,7 +123,7 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
     info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
     learning_rate, epoch = info['learning_rate'], info['epoch']
     logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
-    return lr, epoch
+    return learning_rate, epoch
 
 
 """
