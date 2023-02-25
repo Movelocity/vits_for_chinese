@@ -73,9 +73,9 @@ def train(hps):
     lr, epoch_start = utils.load_checkpoint(net_g, optim_g, net_d, optim_d, hps)
 
     scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-        optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_str-2)
+        optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_start-2)
     scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-        optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_str-2)
+        optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_start-2)
 
     scaler = GradScaler(enabled=hps.train.fp16_run)
 
