@@ -81,7 +81,7 @@ def prepare_env():
     try:
         import monotonic_align.maximum_path
     except:
-        print('compiling monotonic align')
+        print('正在编译monotonic_align模块')
         run(f"cd monotonic_align; {python} setup.py build_ext --inplace; cd ..", live=True)
 
     if "--exit" in sys.argv:
