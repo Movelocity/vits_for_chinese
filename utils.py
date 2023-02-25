@@ -71,7 +71,7 @@ def is_installed(package):
 def prepare_env():
     if not is_installed("torch") or not is_installed("torchaudio"):
         torch_command = "pip install torch==1.13.1+cu117 torchaudio==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
-        run(f'"{python}" -m {torch_command}', "Installing torch and torchvision", "Couldn't install torch", live=True)
+        run(f'"{python}" -m {torch_command}', "Installing torch and torchaudio", "Couldn't install torch", live=True)
     if not is_installed("pypinyin"):
         run_pip(f"install pypinyin", "pypinyin")
     if not is_installed("Cython"):
@@ -81,6 +81,8 @@ def prepare_env():
     if "--exit" in sys.argv:
         print("Exiting because of --exit argument")
         exit(0)
+
+prepare_env()
 
 def load_model(model, saved_state_dict):
     state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
@@ -127,14 +129,14 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
 
 
 """
-> ls -hl logs/zh/epoch_10
+> ls -hl logs/zh/epoch_7
 /bin/bash: /opt/conda/lib/libtinfo.so.6: no version information available (required by /bin/bash)
-total 1.3G
--rw-r--r-- 1 root root 179M Feb 25 01:00 discriminator.ckpt
--rw-r--r-- 1 root root 152M Feb 25 01:00 generator.ckpt
--rw-r--r-- 1 root root  431 Feb 25 01:00 info.pt
--rw-r--r-- 1 root root 536M Feb 25 01:00 optim_d
--rw-r--r-- 1 root root 456M Feb 25 01:00 optim_g
+total 991M
+-rw-r--r-- 1 root root 179M Feb 25 01:11 discriminator.ckpt
+-rw-r--r-- 1 root root 152M Feb 25 01:11 generator.ckpt
+-rw-r--r-- 1 root root  431 Feb 25 01:11 info.pt
+-rw-r--r-- 1 root root 357M Feb 25 01:11 optim_d
+-rw-r--r-- 1 root root 304M Feb 25 01:11 optim_g
 """
 
 def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_dir):
