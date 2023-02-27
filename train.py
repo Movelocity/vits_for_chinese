@@ -215,7 +215,9 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--model', type=str, default="model",
                       help='Model name')
     args = parser.parse_args()
-    hps = utils.get_hparams(args)  # 已创建logs文件夹
 
+    utils.prepare_env()
+
+    hps = utils.get_hparams(args)  # 已创建logs文件夹
     print("-------- running ---------")
     train(hps)

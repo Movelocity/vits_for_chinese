@@ -74,13 +74,12 @@ def frp_for_online_tensorboard(server_ip, server_port, local_port, remote_port):
         run_pip(f"install tensorboard==2.3.0", "tensorboard")
 
     import platform
-    if platform.system() == "Linux":
+    if platform.system() == "Linux" and not os.path.exists('./frp_0.37.0_linux_amd64.tar.gz'):
         run(
             'wget -nc https://github.com/fatedier/frp/releases/download/v0.37.0/frp_0.37.0_linux_amd64.tar.gz'
             '&& tar -zxvf frp_0.37.0_linux_amd64.tar.gz'
             '&& mv frp_0.37.0_linux_amd64 frp37',
-            desc="正在安装frp(代理)",
-            live=True
+            desc="正在安装frp(代理)"
         )
         client_config = \
 """
@@ -100,10 +99,10 @@ custom_domains = {0}
             print('配置已写入frpc.ini:')
             print(client_config)
 
-        run('./frp37/frpc -c ./frp37/frpc.ini > ./frp37/output.txt &')
-        time.sleep(3)
+        run('./frp37/frpc -c ./frp37/frpc.ini > ./frp37/output.txt 2>&1 &')
+        time.sleep(5)
         with open('./frp37/output.txt', 'r') as f:
-            print(f.read)
+            print(f.read())
         tb_link = f'http://{server_ip}:{server_port}'
     else:
         print('非Linux系统, 默认本地使用, 不用安装frp')
@@ -112,9 +111,6 @@ custom_domains = {0}
     print(f'已启动TensorBoard, 训练产生记录后后再打开{tb_link}')
 
 def prepare_env():
-    if not is_installed("torch") or not is_installed("torchaudio"):
-        torch_command = "pip install torch==1.13.1+cu117 torchaudio==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
-        run(f'"{python}" -m {torch_command}', "Installing torch and torchaudio", "Couldn't install torch", live=True)
     if not is_installed("pypinyin"):
         run_pip(f"install pypinyin", "pypinyin")
     if not is_installed("matplotlib"):
@@ -134,9 +130,12 @@ def prepare_env():
         print("Exiting because of --exit argument")
         exit(0)
 
-prepare_env()
-
-import torch
+try:   # 简单检查一下 PyTorch 有没有安装，没有的话就自动安装咯
+    import torch
+except:
+    torch_command = "pip install torch==1.13.1+cu117 torchaudio==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
+    run(f'"{python}" -m {torch_command}', "Installing torch and torchaudio", "Couldn't install torch", live=True)
+    
 def load_model(model, saved_state_dict):
     state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
     new_state_dict= {}
