@@ -7,6 +7,7 @@ import numpy as np
 import shutil
 import importlib
 import subprocess
+import time
 
 MATPLOTLIB_FLAG = False
 
@@ -67,16 +68,48 @@ def is_installed(package):
         return False
     return spec is not None
 
-def frp_for_online_tensorboard(frpc_ini, enable=False):
-    if not enable: return
-    # wget https://github.com/fatedier/frp/releases/download/v0.37.0/frp_0.37.0_linux_amd64.tar.gz
-    # tar -zxvf frp_0.37.0_linux_amd64.tar.gz
-    # mv frp_0.37.0_linux_amd64 frp37
-    with open('frp37/frpc.ini', 'w') as f:
-        f.write(frpc_ini)
-        print('配置已写入frpc.ini')
-    run('./frp37/frpc -c ./frp37/frpc.ini >./output.txt 2>&1 &')
-    pass
+def frp_for_online_tensorboard(frpc_ini, server_ip, server_port, local_port, remote_port):
+    if not is_installed("tensorboard"):  # 保证 tensorboard 能用
+        run_pip(f'install protobuf=<3.20.0')
+        run_pip(f"install tensorboard==2.3.0", "tensorboard")
+
+    import platform
+    if platform.system() == "Linux":
+        run(
+            'wget -nc https://github.com/fatedier/frp/releases/download/v0.37.0/frp_0.37.0_linux_amd64.tar.gz'
+            '&& tar -zxvf frp_0.37.0_linux_amd64.tar.gz'
+            '&& mv frp_0.37.0_linux_amd64 frp37',
+            desc="正在安装frp(代理)",
+            live=True
+        )
+        client_config = \
+"""
+[common]
+server_addr = {0}
+server_port = {1}
+
+[web]
+type = http
+local_port = {2}
+remote_port = {3}
+custom_domains = {0}
+""".format(server_ip, server_port, local_port, remote_port)
+
+        with open('./frp37/frpc.ini', 'w') as f:
+            f.write(client_config)
+            print('配置已写入frpc.ini:')
+            print(client_config)
+
+        run('./frp37/frpc -c ./frp37/frpc.ini > ./frp37/output.txt &')
+        time.sleep(3)
+        with open('./frp37/output.txt', 'r') as f:
+            print(f.read)
+        tb_link = f'http://{server_ip}:{server_port}'
+    else:
+        print('非Linux系统, 默认本地使用, 不用安装frp')
+        tb_link = f'http://localhost:{local_port}'
+    run(f'tensorboard --logdir ./logs --host 0.0.0.0 --port {local_port} &')
+    print(f'已启动TensorBoard, 训练产生记录后后再打开{tb_link}')
 
 def prepare_env():
     if not is_installed("torch") or not is_installed("torchaudio"):
@@ -90,7 +123,7 @@ def prepare_env():
         run_pip(f"install Cython==0.29.21", "Cython")
     if not is_installed("librosa"):
         run_pip(f"install librosa==0.6.0", "librosa")
-
+    
     try:
         import monotonic_align.maximum_path
     except:
@@ -121,16 +154,52 @@ def load_model(model, saved_state_dict):
 
 # TODO: 下载共享的预训练权重
 def from_pretrained(model, link):
-    pass
+    name = link.split('/')[-1]
+    try:
+        run(f'wget -nc -O ./{name} {link}',
+                desc='正在加载预训练权重', errdesc='预训练权重未加载')
+    except RuntimeError:
+        return
+    # 考虑使用基于Transformer的预训练Tokenizer，但是可能覆盖不了每个词的读音，暂时搁置
+    
+    ld_ckpt = torch.load(f'./{name}', map_location='cpu')
+    if isinstance(ld_ckpt, dict) and 'model' in ld_ckpt.keys():
+        saved_state_dict = ld_ckpt['model']
+    else:
+        saved_state_dict = ld_ckpt
+
+    state_dict = model.state_dict()
+    init_speaker_emb, init_vocab_emb = False, False
+
+    try:
+        if model.state_dict()['enc_p.emb.weight'].shape != saved_state_dict['enc_p.emb.weight'].shape:
+            init_vocab_emb = True
+        if model.state_dict()['emb_g.weight'].shape != saved_state_dict['emb_g.weight'].shape:
+            init_speaker_emb = True
+    except:
+        init_speaker_emb = True
+
+    new_state_dict= {}
+    for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
+        if k=='emb_g.weight' and init_speaker_emb:
+            new_state_dict[k] = torch.randn(hps.data.n_speakers, hps.model.gin_channels)
+            torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.gin_channels**-0.5)
+            print('Randomly init speaker embeddings.')
+        elif k=='enc_p.emb.weight' and init_vocab_emb:
+            new_state_dict[k] = torch.randn(len(text.symbols), hps.model.hidden_channels)
+            torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.hidden_channels**-0.5)
+            print('Randomly init vocab embeddings.')
+        else: new_state_dict[k] = v
+    model.load_state_dict(new_state_dict, strict=False)
 
 def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
     model_dir = hps.model_dir
     folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
     if len(folders) == 0:
+        # 测试链接来自仓库: https://github.com/SayaSS/vits-finetuning，若侵权请联系我删除
+        from_pretrained(net_g, 'https://huggingface.co/spaces/sayashi/vits-uma-genshin-honkai/resolve/main/model/G_0-p.pth')
+        from_pretrained(net_d, 'https://huggingface.co/spaces/sayashi/vits-uma-genshin-honkai/resolve/main/model/D_0-p.pth')
         return hps.train.learning_rate, 1
-        # TODO: 下载预训练权重
-        ckpt_folder = os.path.join(model_dir, 'epoch_0')
-        os.mkdir(ckpt_folder)
     else:
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
