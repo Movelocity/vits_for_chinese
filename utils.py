@@ -8,6 +8,7 @@ import shutil
 import importlib
 import subprocess
 import time
+import text
 
 MATPLOTLIB_FLAG = False
 
