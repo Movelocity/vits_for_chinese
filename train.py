@@ -198,7 +198,7 @@ def evaluate(hps, generator, writer_eval, epoch):
         y_hat = generator.infer(input_ids, input_lengths, sid=sid)[0]
 
         y_hat_mel = mel_spectrogram_torch(
-            audio.squeeze(1).float(),
+            y_hat.squeeze(1).float(),
             hps.data.filter_length,
             hps.data.n_mel_channels,
             hps.data.sampling_rate,
