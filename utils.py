@@ -196,10 +196,9 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
     model_dir = hps.model_dir
     folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
     if len(folders) == 0:
-        # 测试链接来自仓库: https://github.com/SayaSS/vits-finetuning，若侵权请联系我删除
-        from_pretrained(net_g, 'https://huggingface.co/spaces/sayashi/vits-uma-genshin-honkai/resolve/main/model/G_0-p.pth')
-        from_pretrained(net_d, 'https://huggingface.co/spaces/sayashi/vits-uma-genshin-honkai/resolve/main/model/D_0-p.pth')
-        return hps.train.learning_rate, 1
+        return hps.train.learning_rate, 1  # 暂时停用预训练下载，等我整理一下上传 w/o speaker_emb 的模型
+        from_pretrained(net_g, '')
+        from_pretrained(net_d, '')
     else:
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
