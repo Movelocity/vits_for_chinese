@@ -15,6 +15,8 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast, GradScaler
 
+utils.prepare_env()
+
 from data_utils import (
     TextAudioSpeakerLoader,
     TextAudioSpeakerCollate,
@@ -215,8 +217,6 @@ if __name__ == "__main__":
     parser.add_argument('-m', '--model', type=str, default="model",
                       help='Model name')
     args = parser.parse_args()
-
-    utils.prepare_env()
 
     hps = utils.get_hparams(args)  # 已创建logs文件夹
     print("-------- running ---------")
