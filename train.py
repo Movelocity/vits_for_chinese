@@ -176,12 +176,11 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 
         # 写入tensorboard日志
         utils.summarize(writer=writer, global_step=epoch, images=image_dict, scalars=scalar_dict)
+        print('====> Epoch: {}'.format(epoch))
 
     if epoch % hps.train.eval_interval == 1:
         evaluate(hps, net_g, writer_eval, epoch)
         utils.save_checkpoint(net_g, optim_g, net_d, optim_d, hps.train.learning_rate, epoch, hps.model_dir)
-
-    print('====> Epoch: {}'.format(epoch))
 
 @torch.no_grad()
 def evaluate(hps, generator, writer_eval, epoch):
