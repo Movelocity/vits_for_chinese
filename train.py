@@ -155,7 +155,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
             "info/learning_rate": lr, 
             "loss/loss_gen_all": loss_gen_all, 
             "loss/loss_disc_all": loss_disc_all,  # 记录判别器损失，可以知道训练有没有崩掉
-            "loss/g/dur": loss_dur, 
+            "loss/g/dur": loss_dur,
             "loss/g/mel": loss_mel,
             "loss/g/kl": loss_kl,
             "loss/g/fm": loss_fm, 
@@ -189,17 +189,31 @@ def evaluate(hps, generator, writer_eval, epoch):
     eval_data = load_filepaths_and_text(hps.data.validation_files)[:4]
 
     audio_dict = {}
+    image_dict = {}
     for i, data in enumerate(eval_data):
         phonemes = text.pypinyin_g2p_phone(data[-1])
         input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).cuda()
         input_lengths = torch.LongTensor([input_ids.size(1)]).cuda()
         sid = torch.LongTensor([int(data[1])]).cuda()
-        audio = generator.infer(input_ids, input_lengths, sid=sid)[0]
-        audio_dict.update({str(i): audio[0, :, :]})
+        y_hat = generator.infer(input_ids, input_lengths, sid=sid)[0]
+
+        y_hat_mel = mel_spectrogram_torch(
+            audio.squeeze(1).float(),
+            hps.data.filter_length,
+            hps.data.n_mel_channels,
+            hps.data.sampling_rate,
+            hps.data.hop_length,
+            hps.data.win_length,
+            hps.data.mel_fmin,
+            hps.data.mel_fmax
+        )
+        audio_dict.update({str(i): y_hat[0, :, :]})
+        image_dict.update({f"gen/mel/{i}": utils.plot_spectrogram_to_numpy(y_hat_mel[0].cpu().numpy())})
 
     utils.summarize(
         writer=writer_eval,
         global_step=epoch,
+        images=image_dict,
         audios=audio_dict,
         audio_sampling_rate=hps.data.sampling_rate
     )
