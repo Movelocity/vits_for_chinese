@@ -113,6 +113,13 @@ custom_domains = {0}
     print(f'已启动TensorBoard, 训练产生记录后后再打开{tb_link}')
 
 def prepare_env():
+    if not is_installed("torch"):
+        torch_command = 'pip3 install torch==1.13.1+cu116 -f https://download.pytorch.org/whl/torch_stable.html'
+        run(f'"{python}" -m {torch_command}', "Installing torch", "Couldn't install torch", live=True)
+    if not is_installed('torchaudio'):
+        torch_command = "pip3 install torchaudio==0.13.0"
+        run(f'"{python}" -m {torch_command}', "Installing torchaudio", "Couldn't install torchaudio", live=True)
+    
     if not is_installed("pypinyin"):
         run_pip(f"install pypinyin", "pypinyin")
     if not is_installed("matplotlib"):
@@ -132,15 +139,9 @@ def prepare_env():
         print("Exiting because of --exit argument")
         exit(0)
 
-try:   # 简单检查一下 PyTorch 有没有安装，没有的话就自动安装咯
-    import torch
-except:
-    torch_command = 'pip3 install torch==1.13.1+cu116 -f https://download.pytorch.org/whl/torch_stable.html'
-    run(f'"{python}" -m {torch_command}', "Installing torch", "Couldn't install torch", live=True)
-    torch_command = "pip3 install torchaudio==0.12.0"
-    run(f'"{python}" -m {torch_command}', "Installing torchaudio", "Couldn't install torchaudio", live=True)
-    import torch
-    
+prepare_env()
+
+import torch
 def load_model(model, saved_state_dict):
     state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
     new_state_dict= {}
