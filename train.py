@@ -67,6 +67,7 @@ def train(hps):
         len(text.symbols),
         hps.data.filter_length // 2 + 1,
         hps.train.segment_size // hps.data.hop_length,
+        n_speakers=hps.data.n_speakers,
         **hps.model).cuda()
     net_d = MultiPeriodDiscriminator(hps.model.use_spectral_norm).cuda()
     optim_g = torch.optim.AdamW(
