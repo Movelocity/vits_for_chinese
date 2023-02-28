@@ -40,7 +40,7 @@ def train(hps):
     logger = utils.get_logger(hps.model_dir)
     logger.info(hps)
     # utils.check_git_hash(hps.model_dir)
-    writer = SummaryWriter(log_dir=hps.model_dir)
+    writer = SummaryWriter(log_dir=os.path.join(hps.model_dir, "train"))
     writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
