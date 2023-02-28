@@ -199,7 +199,7 @@ def evaluate(hps, generator, writer_eval, epoch):
     audio_dict = {}
     image_dict = {}
     for i, data in enumerate(eval_data):
-        phonemes = text.pypinyin_g2p_phone(data[-1])
+        phonemes = data[-1]
         input_ids = torch.LongTensor(text.tokens2ids(phonemes)).unsqueeze(0).cuda()
         input_lengths = torch.LongTensor([input_ids.size(1)]).cuda()
         sid = torch.LongTensor([int(data[1])]).cuda()
