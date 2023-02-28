@@ -71,7 +71,7 @@ def is_installed(package):
 
 def frp_for_online_tensorboard(server_ip, server_port, local_port, remote_port):
     if not is_installed("tensorboard"):  # 保证 tensorboard 能用
-        run_pip(f'install protobuf=<3.20.0')
+        run_pip(f'install protobuf==3.19.0')
         run_pip(f"install tensorboard==2.3.0", "tensorboard")
 
     import platform
@@ -134,8 +134,11 @@ def prepare_env():
 try:   # 简单检查一下 PyTorch 有没有安装，没有的话就自动安装咯
     import torch
 except:
-    torch_command = "pip install torch==1.13.1+cu117 torchaudio==0.14.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117"
-    run(f'"{python}" -m {torch_command}', "Installing torch and torchaudio", "Couldn't install torch", live=True)
+    torch_command = 'pip3 install torch==1.13.1+cu116 -f https://download.pytorch.org/whl/torch_stable.html'
+    run(f'"{python}" -m {torch_command}', "Installing torch", "Couldn't install torch", live=True)
+    torch_command = "pip3 install torchaudio==0.12.0"
+    run(f'"{python}" -m {torch_command}', "Installing torchaudio", "Couldn't install torchaudio", live=True)
+    import torch
     
 def load_model(model, saved_state_dict):
     state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
