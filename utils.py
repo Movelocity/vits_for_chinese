@@ -8,7 +8,6 @@ import shutil
 import importlib
 import subprocess
 import time
-import text
 
 MATPLOTLIB_FLAG = False
 
@@ -191,6 +190,7 @@ def from_pretrained(model, link):
             torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.gin_channels**-0.5)
             print('Randomly init speaker embeddings.')
         elif k=='enc_p.emb.weight' and init_vocab_emb:
+            import text
             new_state_dict[k] = torch.randn(len(text.symbols), hps.model.hidden_channels)
             torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.hidden_channels**-0.5)
             print('Randomly init vocab embeddings.')
