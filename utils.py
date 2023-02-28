@@ -103,7 +103,7 @@ custom_domains = {0}
         time.sleep(5)
         with open('./frp37/output.txt', 'r') as f:
             print(f.read())
-        tb_link = f'http://{server_ip}:{server_port}'
+        tb_link = f'http://{server_ip}:{remote_port}'
     else:
         print('非Linux系统, 默认本地使用, 不用安装frp')
         tb_link = f'http://localhost:{local_port}'
