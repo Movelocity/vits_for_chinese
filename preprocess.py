@@ -1,6 +1,6 @@
 import argparse
 import text
-from utils import load_filepaths_and_text
+from data_utils import load_filepaths_and_text
 import random
 
 # python preprocess.py --mix True --filelists filelists/elysia_collect.txt.cleaned filelists/paimon_collect.txt.cleaned
