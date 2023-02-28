@@ -53,7 +53,7 @@ def clean_tokens(filelist):
     return 'bak file saved: %s, %d cleared.'%(filelist+'.bak', err_cnt)
 
 
-def preprocess(filelist, text_index=1, out_extension='cleaned'):
+def preprocess(filelist, out_extension='cleaned'):
     """
     filelist 指定文件,需要包含路径信息,
 
@@ -66,7 +66,7 @@ def preprocess(filelist, text_index=1, out_extension='cleaned'):
     print("START:", filelist)
     filepaths_and_text = load_filepaths_and_text(filelist)
     for i in range(len(filepaths_and_text)):
-        original_text = filepaths_and_text[i][text_index]
+        original_text = filepaths_and_text[i][-1]
         cleaned_text = text.pypinyin_g2p_phone(original_text)
         filepaths_and_text[i][text_index] = cleaned_text
         filepaths_and_text[i][0] = "./wave_data/"+filepaths_and_text[i][0]
