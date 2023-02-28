@@ -44,17 +44,25 @@ def train(hps):
     writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
     train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
-    train_sampler = DistributedBucketSampler(
-        train_dataset,
-        hps.train.batch_size,
-        [32, 300, 400, 500, 600, 700, 800, 900, 1000],
-        num_replicas=1,
-        rank=0,
-        shuffle=True)
+
+    # train_sampler = DistributedBucketSampler(
+    #     train_dataset,
+    #     hps.train.batch_size,
+    #     [32, 300, 400, 500, 600, 700, 800, 900, 1000],
+    #     num_replicas=1,
+    #     rank=0,
+    #     shuffle=True)
+
     collate_fn = TextAudioSpeakerCollate()
-    train_loader = DataLoader(train_dataset, num_workers=2, shuffle=False, pin_memory=True,
-                              collate_fn=collate_fn, batch_sampler=train_sampler)
-    
+    # train_loader = DataLoader(train_dataset, num_workers=2, shuffle=False, pin_memory=True,
+    #                           collate_fn=collate_fn, batch_sampler=train_sampler)
+
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=hps.train.batch_size,num_workers=2, 
+        shuffle=True, pin_memory=True,
+        collate_fn=collate_fn
+    )
     net_g = SynthesizerTrn(
         len(text.symbols),
         hps.data.filter_length // 2 + 1,

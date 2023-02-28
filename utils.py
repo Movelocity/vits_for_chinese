@@ -129,7 +129,8 @@ def prepare_env():
         run_pip(f"install librosa==0.6.0", "librosa")
     
     try:
-        import monotonic_align.maximum_path
+        import monotonic_align
+        monotonic_align.maximum_path
     except:
         print('正在编译monotonic_align模块')
         run(f"cd monotonic_align; {python} setup.py build_ext --inplace; cd ..", live=True)
