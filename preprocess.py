@@ -68,7 +68,7 @@ def preprocess(filelist, out_extension='cleaned'):
     for i in range(len(filepaths_and_text)):
         original_text = filepaths_and_text[i][-1]
         cleaned_text = text.pypinyin_g2p_phone(original_text)
-        filepaths_and_text[i][text_index] = cleaned_text
+        filepaths_and_text[i][-1] = cleaned_text
         filepaths_and_text[i][0] = "./wave_data/"+filepaths_and_text[i][0]
 
     new_filelist = filelist + "." + out_extension
