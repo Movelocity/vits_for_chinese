@@ -86,7 +86,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
             spec = spectrogram_torch(
                 audio_norm, 
                 n_fft=self.filter_length,
-                sr=self.sampling_rate,
+                sampling_rate=self.sampling_rate,
                 hop_size=self.hop_length, 
                 win_size=self.win_length,
                 center=False)
