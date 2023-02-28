@@ -15,8 +15,6 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast, GradScaler
 
-utils.prepare_env()
-
 from data_utils import (
     TextAudioSpeakerLoader,
     TextAudioSpeakerCollate,
