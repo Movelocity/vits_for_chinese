@@ -108,7 +108,8 @@ custom_domains = {0}
     else:
         print('非Linux系统, 默认本地使用, 不用安装frp')
         tb_link = f'http://localhost:{local_port}'
-    run(f'tensorboard --logdir ./logs --host 0.0.0.0 --port {local_port} &')
+
+    run(f'tensorboard --logdir ./logs --host 0.0.0.0 --port {local_port} > ./frp37/output_tb.txt 2>&1 &')
     print(f'已启动TensorBoard, 训练产生记录后后再打开{tb_link}')
 
 def prepare_env():
