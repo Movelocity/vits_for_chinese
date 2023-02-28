@@ -77,8 +77,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         if sampling_rate != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(
                 sampling_rate, self.sampling_rate))
-        audio_norm = audio
-        audio_norm = audio_norm.unsqueeze(0)
+        audio_norm = audio.unsqueeze(0)
         spec_filename = filename.replace(".wav", ".spec.pt")
         if os.path.exists(spec_filename):
             spec = torch.load(spec_filename)
