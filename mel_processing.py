@@ -10,7 +10,6 @@ import librosa
 import librosa.util as librosa_util
 from librosa.util import normalize, pad_center, tiny
 from scipy.signal import get_window
-from scipy.io.wavfile import read
 from librosa.filters import mel as librosa_mel_fn
 
 MAX_WAV_VALUE = 32768.0
@@ -75,7 +74,7 @@ def spec_to_mel_torch(spec, n_fft=None, num_mels=None, sampling_rate=None, fmin=
         num_mels = config.n_mel_channels
         sampling_rate = config.sampling_rate
         fmin = config.mel_fmin
-        f_max = config.mel_fmax
+        fmax = config.mel_fmax
     dtype_device = str(spec.dtype) + '_' + str(spec.device)
     fmax_dtype_device = str(fmax) + '_' + dtype_device
     if fmax_dtype_device not in mel_basis:  # 梅尔滤波器只需构造一次

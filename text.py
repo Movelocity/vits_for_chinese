@@ -1,3 +1,5 @@
+import utils  # 保证先安装pypinyin
+
 from pypinyin import Style, pinyin
 
 # 定义标点符号集，若修改的话需要重新训练模型

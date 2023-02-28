@@ -59,8 +59,10 @@ def train(hps):
 
     train_loader = DataLoader(
         train_dataset, 
-        batch_size=hps.train.batch_size,num_workers=2, 
-        shuffle=True, pin_memory=True,
+        batch_size=hps.train.batch_size,
+        num_workers=2, 
+        shuffle=True, 
+        pin_memory=True,
         collate_fn=collate_fn
     )
     net_g = SynthesizerTrn(
