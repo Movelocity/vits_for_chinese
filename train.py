@@ -104,7 +104,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
     train_loader = loaders
     if writers is not None: writer, writer_eval = writers
 
-    train_loader.batch_sampler.set_epoch(epoch)
+    # train_loader.batch_sampler.set_epoch(epoch)
     
     net_g.train()
     net_d.train()
