@@ -12,7 +12,8 @@ Copied from this repo: https://github.com/jaywalnut310/vits
 
 ### 2034-02-28 更新日志
 ```
-1.加入frp内网穿透并且可以自动打开 tensorboard （需要自己有公网IP来支持内网穿透，没有的话不建议在kaggle平台上学习训练模型）
+1.加入frp内网穿透并且可以自动打开 tensorboard 
+（需要自己有公网IP来支持内网穿透，没有的话不建议在kaggle平台上学习训练模型）
 参考以下代码
 import utils
 utils.frp_for_online_tensorboard(
@@ -69,5 +70,16 @@ https://www.kaggle.com/code/hollway/train-vits
 项目结构修改中，使用前建议Fork一份到自己的仓库。
 
 如遇到 Bug 请提交 Issue 或联系UP主。
+
+音频读取避坑
+```
+1.部分标贝数据集的音频无法用 scipy.io.wavfile.read 读取，会报错 local variable 'fs' referenced before assignment
+
+2.使用 scipy.io.wavfile.read 读取的音频波形值域在 0~32768
+一般需要手动归一化到 0~1 区间: wave = wave/32768
+
+3.使用 torchaudio.load 读取的音频波形值域在 0~1
+如果继续用上面的代码归一化, 值域将变为 0 ~ 1/32768。这种情况可以根据频谱亮度看出来。
+```
 
 写在最后。后续可以考虑移除说话者编码，纯粹用lora来调整和分享声线，而不用调整主干。也就是一个模型通用，然后声线可以额外训练并保存到一个小文件中。好处是微调收敛快，特征文件小，主干模型可以全社区共享。
