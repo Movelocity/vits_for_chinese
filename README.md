@@ -2,15 +2,15 @@
 
 Copied from this repo: https://github.com/jaywalnut310/vits
 
-**语音数据集制作方法** [notebooks/make_dataset.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/make_dataset.ipynb)
+- **语音数据集制作方法** [notebooks/make_dataset.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/make_dataset.ipynb)
 
-也可以用 whisper 识别语音: https://github.com/openai/whisper
+- 可以用 whisper 识别语音: https://github.com/openai/whisper
 
-**训练方法详见** [notebooks/train.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/train.ipynb)
+- **训练方法详见** [notebooks/train.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/train.ipynb)
 
-**使用方法详见** [notebooks/infer.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/infer.ipynb)
+- **使用方法详见** [notebooks/infer.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/infer.ipynb)
 
-**windows平台调用vgmstream的脚本** [notebooks/convert.bat.txt](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/convert.bat.txt) (使用时去掉txt后缀)
+- **windows平台调用vgmstream的脚本** [notebooks/convert.bat.txt](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/convert.bat.txt) (使用时去掉txt后缀)
 
 ### 2034-02-28 更新日志
 ```
