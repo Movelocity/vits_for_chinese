@@ -47,11 +47,11 @@ https://pytorch.org/get-started/locally/
 ```
 pip3 install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
 ```
-其中torchvision可以不装。但一定要安装torch和torchaudio，直接使用官方链接可以避免版本差异导致的报错。
+其中 torchvision 可以不装。但一定要安装 torch 和 torchaudio，直接使用官方链接可以避免版本差异导致的报错。
 
-- 如果你的云GPU环境出现类似 google::protobuf::FatalException 的错误，网上对这个问题是没有答案的，目前猜测是tensorflow版本过低导致的问题，我的建议是直接卸载 tensorflow。
+- 如果你的云GPU环境出现类似 ***google::protobuf::FatalException*** 的错误，网上对这个问题是没有答案的，目前猜测是 tensorflow 版本过低导致的问题，我的建议是直接卸载 tensorflow。
 
-如果想在kaggle训练模型，可以使用 **frp** (fast reverse proxy)暴露kaggle端的网络端口，然后就可以在其它电脑上用浏览器查看 tensorboard 页面了。
+如果想在kaggle训练模型，可以使用 **frp** (fast reverse proxy) 暴露 kaggle 端的网络端口，然后就可以在其它电脑上用浏览器查看 tensorboard 页面了。(需要有公网IP，自己租个云服务器或者你的Wifi就有公网IP，不然暂时没有办法在kaggle上实时查看训练效果)
 https://www.kaggle.com/code/hollway/train-vits
 
 
@@ -61,4 +61,4 @@ https://www.kaggle.com/code/hollway/train-vits
 
 如遇到 Bug 请提交 Issue 或联系UP主。
 
-写在最后。后续可以考虑移除说话者编码，纯粹用lora来调整和分享声线，而不用调整主干。也就是一个模型通用，然后声线可以额外训练并保存到一个小文件中。好处是微调收敛快，文件小，主干模型可以全社区共享。
+写在最后。后续可以考虑移除说话者编码，纯粹用lora来调整和分享声线，而不用调整主干。也就是一个模型通用，然后声线可以额外训练并保存到一个小文件中。好处是微调收敛快，特征文件小，主干模型可以全社区共享。

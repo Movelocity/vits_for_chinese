@@ -69,7 +69,8 @@ def is_installed(package):
     return spec is not None
 
 def frp_for_online_tensorboard(server_ip, server_port, local_port, remote_port):
-    if not is_installed("tensorboard"):  # 保证 tensorboard 能用
+    """不保证 tensorboard 能用, 出了bug请重装tensorflow"""
+    if not is_installed("tensorboard"): 
         run_pip(f'install protobuf==3.19.0')
         run_pip(f"install tensorboard==2.3.0", "tensorboard")
 
