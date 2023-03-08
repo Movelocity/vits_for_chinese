@@ -158,7 +158,7 @@ def load_model(model, saved_state_dict):
         model.load_state_dict(new_state_dict)
 
 # TODO: 下载共享的预训练权重
-def from_pretrained(model, link):
+def from_pretrained(hps, model, link):
     name = link.split('/')[-1]
     try:
         run(f'wget -nc -O ./{name} {link}',
@@ -166,7 +166,7 @@ def from_pretrained(model, link):
     except RuntimeError:
         return
     # 考虑使用基于Transformer的预训练Tokenizer，但是可能覆盖不了每个词的读音，暂时搁置
-    
+
     ld_ckpt = torch.load(f'./{name}', map_location='cpu')
     if isinstance(ld_ckpt, dict) and 'model' in ld_ckpt.keys():
         saved_state_dict = ld_ckpt['model']
@@ -202,9 +202,11 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
     model_dir = hps.model_dir
     folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
     if len(folders) == 0:
-        return hps.train.learning_rate, 1  # 暂时停用预训练下载，等我整理一下上传 w/o speaker_emb 的模型
-        from_pretrained(net_g, '')
-        from_pretrained(net_d, '')
+        return hps.train.learning_rate, 1
+        # 暂时停用预训练下载，等我整理一下上传 w/o speaker_emb 的模型
+        from_pretrained(hps, net_g, '')
+        from_pretrained(hps, net_d, '')  # 不同结构的模型目前无法兼容，暂时不使用预训练
+        return hps.train.learning_rate, 1
     else:
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
