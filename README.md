@@ -10,6 +10,15 @@ Copied from this repo: https://github.com/jaywalnut310/vits
 
 **windows平台调用vgmstream的脚本** [notebooks/convert.bat.txt](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/convert.bat.txt) (使用时去掉txt后缀)
 
+### 2034-02-28 更新日志
+```
+1.加入frp内网穿透并且可以自动打开 tensorboard （需要自己有公网IP来支持内网穿透，没有的话不建议在kaggle平台上学习训练模型）
+参考以下代码
+import utils
+utils.frp_for_online_tensorboard(
+    server_ip='xxx.xxx.xxx.xxx', server_port='7000', local_port='7860', remote_port='7860')
+```
+
 ### 2023-02-25 更新日志
 ```
 1.加入 python 版本检查，只能使用 python3，防止出现意料之外的错误

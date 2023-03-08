@@ -69,7 +69,14 @@ def is_installed(package):
     return spec is not None
 
 def frp_for_online_tensorboard(server_ip, server_port, local_port, remote_port):
-    """不保证 tensorboard 能用, 出了bug请重装tensorflow"""
+    """启用 frp 内网穿透并开开启 tensorboard 对应端口
+      server_ip: 你的公网IP, 没有公网IP(一般是服务器)的话就跳过这一步吧
+      server_port: 服务器上运行的frp的 bind_port 数值
+      local_port: 在 kaggle 上打开的网络端口
+      remote_port: 在服务器上运行的frp的 vhost_http_port 数值
+    不保证 tensorboard 能用, 出了bug请重装tensorflow
+    参考kaggle笔记本: https://www.kaggle.com/code/hollway/train-vits
+    """
     if not is_installed("tensorboard"): 
         run_pip(f'install protobuf==3.19.0')
         run_pip(f"install tensorboard==2.3.0", "tensorboard")
