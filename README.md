@@ -15,14 +15,16 @@ Copied from this repo: https://github.com/jaywalnut310/vits
 ### 2034-02-28 更新日志
 ```
 1.加入frp内网穿透并且可以自动打开 tensorboard 
-（需要自己有公网IP来支持内网穿透，没有的话不建议在kaggle平台上学习训练模型）
+在本地、colab、featurize等支持查看tensorboard的地方不需要这个函数，主要在kaggle上使用
 
 import utils
 utils.frp_for_online_tensorboard(
-    server_ip='xxx.xxx.xxx.xxx', 
-    server_port='7000', 
-    local_port='7860', 
-    remote_port='7860')
+    server_ip='xxx.xxx.xxx.xxx',  # 你的公网IP
+    server_port='7000', # 服务器上运行的frp的 bind_port
+    local_port='7860',  # 在训练主机上打开的网络端口
+    remote_port='7860'  # 在服务器上运行的frp的 vhost_http_port
+)
+详见：https://www.kaggle.com/code/hollway/train-vits
 ```
 
 ### 2023-02-25 更新日志
