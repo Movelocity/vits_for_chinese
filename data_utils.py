@@ -10,16 +10,21 @@ from mel_processing import spectrogram_torch
 from utils import load_wav_to_torch
 from text import tokens2ids
 
+from speechbrain.pretrained import EncoderClassifier  # 增加依赖链有风险
+speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+
+import torchaudio
+import torchaudio.transforms as T
+
 def load_filepaths_and_text(filename, split="|"):
     with open(filename, encoding='utf-8') as f:
         filepaths_and_text = []
         for line in f:
             if split not in line: continue
             path_text = line.strip().split(split)
-            if len(path_text) == 2: path_text.insert(1, '0')  # 默认speaker_id=0
             filepaths_and_text.append(path_text)
-
     return filepaths_and_text
+
 
 
 """Multi speaker version"""
@@ -31,21 +36,24 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
     """
     def __init__(self, audiopaths_sid_text, hparams):
         self.audiopaths_sid_text = load_filepaths_and_text(audiopaths_sid_text)
-        self.max_wav_value = hparams.max_wav_value
+        # self.max_wav_value = 32768.0
         self.sampling_rate = hparams.sampling_rate
         self.filter_length = hparams.filter_length
         self.hop_length    = hparams.hop_length
         self.win_length    = hparams.win_length
         self.sampling_rate = hparams.sampling_rate
 
-        self.add_blank = hparams.add_blank
-        self.cleaned_text = getattr(hparams, "cleaned_text", False)   
+        self.add_blank = False
+        self.cleaned_text = getattr(hparams, "cleaned_text", False)
         self.min_text_len = getattr(hparams, "min_text_len", 1)
         self.max_text_len = getattr(hparams, "max_text_len", 190)
 
         # random.seed(1234)
         random.shuffle(self.audiopaths_sid_text)
         self._filter()
+
+        if sampling_rate != 16000:
+            self.resampler = T.Resample(sampling_rate, new_freq=16000, dtype=waveform.dtype)
 
     def _filter(self):
         """
@@ -54,7 +62,6 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         # Store spectrogram lengths for Bucketing
         # wav_length ~= file_size / (wav_channels * Bytes per dim) = file_size / (1 * 2)
         # spec_length = wav_length // hop_length
-
         audiopaths_sid_text_new = []
         lengths = []
         for audiopath, sid, text in self.audiopaths_sid_text:
@@ -66,32 +73,33 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
 
     def get_audio_text_speaker_pair(self, audiopath_sid_text):
         # separate filename, speaker_id and text
-        audiopath, sid, text = audiopath_sid_text[0], audiopath_sid_text[1], audiopath_sid_text[2]
+        audiopath, text = audiopath_sid_text[0], audiopath_sid_text[1], audiopath_sid_text[2]
         text = self.get_text(text)
-        spec, wav = self.get_audio(audiopath)
-        sid = self.get_sid(sid)
-        return (text, spec, wav, sid)
+        audio, spec, embed = self.get_audio_spec_emb(audiopath)
+        return (text, spec, audio, embed)
 
-    def get_audio(self, filename):
-        audio, sampling_rate = load_wav_to_torch(filename)
-        if sampling_rate != self.sampling_rate:
-            raise ValueError("{} {} SR doesn't match target {} SR".format(
-                sampling_rate, self.sampling_rate))
-        audio_norm = audio.unsqueeze(0)
+    def get_audio_spec_emb(self, filename):
+        audio, sr = torchaudio.load(filename)
+        if sr != self.sampling_rate:
+            raise ValueError("{} {} SR doesn't match target {} SR".format(sr, self.sampling_rate))
+
         spec_filename = filename.replace(".wav", ".spec.pt")
         if os.path.exists(spec_filename):
-            spec = torch.load(spec_filename)
+            spec =  torch.load(spec_filename)
         else:
-            spec = spectrogram_torch(
-                audio_norm, 
-                n_fft=self.filter_length,
-                sampling_rate=self.sampling_rate,
-                hop_size=self.hop_length, 
-                win_size=self.win_length,
-                center=False)
+            spec = spectrogram_torch(audio, n_fft=self.filter_length, sampling_rate=self.sampling_rate,
+                hop_size=self.hop_length, win_size=self.win_length, center=False)
             spec = torch.squeeze(spec, 0)
             torch.save(spec, spec_filename)
-        return spec, audio_norm
+
+        emb_filename = filename.replace(".wav", ".emb.pt")
+        if os.path.exists(emb_filename):
+            embed =  torch.load(emb_filename)
+        else:
+            audio_16k = self.resampler(audio) if sr > 16000 else audio
+            embed = speaker_classifier.encode_batch(audio_16k)[0, 0]
+            torch.save(embed, spec_filename)
+        return audio, spec, embed
 
     def get_text(self, text):
         text_norm = tokens2ids(text)
@@ -99,10 +107,6 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
             text_norm = commons.intersperse(text_norm, 0)
         text_norm = torch.LongTensor(text_norm)
         return text_norm
-
-    def get_sid(self, sid):
-        sid = torch.LongTensor([int(sid)])
-        return sid
 
     def __getitem__(self, index):
         return self.get_audio_text_speaker_pair(self.audiopaths_sid_text[index])
