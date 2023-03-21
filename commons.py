@@ -113,9 +113,11 @@ def fused_add_tanh_sigmoid_multiply(input_a, input_b, n_channels):
 
 def convert_pad_shape(pad_shape):
     """
-    example:
+    安装torch.nn.functional.pad的输入格式定制
+    例子:
     input: [[0, 0], [0, 0], [4, 5]]
     output: [4, 5, 0, 0, 0, 0]
+    表示其中最后一维的左右分别 pad 4 个和 5 个位置
     """
     l = pad_shape[::-1]
     pad_shape = [item for sublist in l for item in sublist]

@@ -119,7 +119,20 @@ custom_domains = {0}
     run(f'tensorboard --logdir ./logs --host 0.0.0.0 --port {local_port} > ./frp37/output_tb.txt 2>&1 &')
     print(f'已启动TensorBoard, 训练产生记录后后再打开{tb_link}')
 
-def prepare_env():
+def install_whisper():
+    run_pip('install -U openai-whisper', 'openai-whisper')
+    run_pip('install git+https://github.com/openai/whisper.git', desc='whisper')
+    import platform
+    if platform.system() == 'Linux':
+        if platform.linux_distribution()[0] == 'CentOS':
+            run('sudo yum update && sudo yum install ffmpeg', desc="ffmpeg")
+        elif platform.linux_distribution()[0] == 'Ubuntu':
+            run('sudo apt update && sudo apt install ffmpeg', desc="ffmpeg")
+    else:
+        print("非 Linux 系统请手动安装 ffmpeg")
+    run_pip('install setuptools-rust', desc='setuptools-rust')
+
+def install_basic():
     if not is_installed("torch"):
         torch_command = 'pip3 install torch==1.13.1+cu116 -f https://download.pytorch.org/whl/torch_stable.html'
         run(f'"{python}" -m {torch_command}', "Installing torch", "Couldn't install torch", live=True)
@@ -135,7 +148,8 @@ def prepare_env():
         run_pip(f"install Cython==0.29.21", "Cython")
     if not is_installed("librosa"):
         run_pip(f"install librosa==0.6.0", "librosa")
-    
+    if not is_installed("speechbrain"):
+        run_pip(f'install speechbrain==0.5.13', 'speechbrain')
     try:
         import monotonic_align
         monotonic_align.maximum_path
@@ -345,10 +359,7 @@ def plot_alignment_to_numpy(alignment, info=None):
   plt.close()
   return data
 
-import torchaudio
-def load_wav_to_torch(full_path):
-    wav, sr = torchaudio.load(full_path)
-    return torch.FloatTensor(wav[0]), sr
+
 
 def get_hparams(args):
     model_dir = os.path.join("./logs", args.model)

@@ -26,9 +26,7 @@
       "win_length": 1024,
       "n_mel_channels": 80,
       "mel_fmin": 0.0,
-      "mel_fmax": null,
-      "add_blank": false,
-      "n_speakers": 2
+      "mel_fmax": null
     },
     "model": {
       "inter_channels": 192,
@@ -46,7 +44,7 @@
       "upsample_kernel_sizes": [16,16,4,4],
       "n_layers_q": 3,
       "use_spectral_norm": false,
-      "gin_channels": 256
+      "gin_channels": 192
     }
 }
   

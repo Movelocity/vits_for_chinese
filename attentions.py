@@ -38,7 +38,6 @@ class Encoder(nn.Module):
             y = self.attn_layers[i](x, x, attn_mask)
             y = self.drop(y)
             x = self.norm_layers_1[i](x + y)
-
             y = self.ffn_layers[i](x, x_mask)
             y = self.drop(y)
             x = self.norm_layers_2[i](x + y)
@@ -47,17 +46,16 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, hidden_channels, filter_channels, n_heads, n_layers, kernel_size=1, p_dropout=0., proximal_bias=False, proximal_init=True, **kwargs):
+    def __init__(
+        self, 
+        hidden_channels, 
+        filter_channels, 
+        n_heads, 
+        n_layers, 
+        kernel_size=1, p_dropout=0., proximal_bias=False, proximal_init=True, **kwargs):
         super().__init__()
-        self.hidden_channels = hidden_channels
-        self.filter_channels = filter_channels
-        self.n_heads = n_heads
-        self.n_layers = n_layers
-        self.kernel_size = kernel_size
-        self.p_dropout = p_dropout
-        self.proximal_bias = proximal_bias
-        self.proximal_init = proximal_init
 
+        self.n_layers = n_layers
         self.drop = nn.Dropout(p_dropout)
         self.self_attn_layers = nn.ModuleList()
         self.norm_layers_0 = nn.ModuleList()
@@ -65,15 +63,16 @@ class Decoder(nn.Module):
         self.norm_layers_1 = nn.ModuleList()
         self.ffn_layers = nn.ModuleList()
         self.norm_layers_2 = nn.ModuleList()
+
         for i in range(self.n_layers):
             self.self_attn_layers.append(MultiHeadAttention(hidden_channels, hidden_channels, n_heads,
-                                         p_dropout=p_dropout, proximal_bias=proximal_bias, proximal_init=proximal_init))
+                    p_dropout=p_dropout, proximal_bias=proximal_bias, proximal_init=proximal_init))
             self.norm_layers_0.append(LayerNorm(hidden_channels))
             self.encdec_attn_layers.append(MultiHeadAttention(
                 hidden_channels, hidden_channels, n_heads, p_dropout=p_dropout))
             self.norm_layers_1.append(LayerNorm(hidden_channels))
             self.ffn_layers.append(FFN(hidden_channels, hidden_channels,
-                                   filter_channels, kernel_size, p_dropout=p_dropout, causal=True))
+                    filter_channels, kernel_size, p_dropout=p_dropout, causal=True))
             self.norm_layers_2.append(LayerNorm(hidden_channels))
 
     def forward(self, x, x_mask, h, h_mask):
@@ -146,56 +145,53 @@ class MultiHeadAttention(nn.Module):
         v = self.conv_v(c)
 
         x, self.attn = self.attention(q, k, v, mask=attn_mask)
-
         x = self.conv_o(x)
         return x
 
     def attention(self, query, key, value, mask=None):
-        # reshape [b, d, t] -> [b, n_h, t, d_k]
+        """
+        对文本编码和频谱编码做 cross-attention
+        也可以只对一种编码做 self-attention
+        reshape [b, d, t] -> [b, n_h, t, d_k]
+        """
         b, d, t_s, t_t = (*key.size(), query.size(2))
-        query = query.view(b, self.n_heads, self.k_channels,
-                           t_t).transpose(2, 3)
-        key = key.view(b, self.n_heads, self.k_channels, t_s).transpose(2, 3)
-        value = value.view(b, self.n_heads, self.k_channels,
-                           t_s).transpose(2, 3)
+        # 将 sequence_length = t 维度移到最后
+        query = query.view(b, self.n_heads, self.k_channels, t_t).transpose(2, 3)  # 文本编码
+        key = key.view(b, self.n_heads, self.k_channels, t_s).transpose(2, 3)      # 频谱编码
+        value = value.view(b, self.n_heads, self.k_channels, t_s).transpose(2, 3)  # 频谱编码
 
-        scores = torch.matmul(
-            query / math.sqrt(self.k_channels), key.transpose(-2, -1))
+        scores = torch.matmul(query / math.sqrt(self.k_channels), key.transpose(-2, -1))
         if self.window_size is not None:
             assert t_s == t_t, "Relative attention is only available for self-attention."
-            key_relative_embeddings = self._get_relative_embeddings(
-                self.emb_rel_k, t_s)
+            key_relative_embeddings = self._get_relative_embeddings(self.emb_rel_k, t_s)
             rel_logits = self._matmul_with_relative_keys(
                 query / math.sqrt(self.k_channels), key_relative_embeddings)
-            scores_local = self._relative_position_to_absolute_position(
-                rel_logits)
+            scores_local = self._relative_position_to_absolute_position(rel_logits)
             scores = scores + scores_local
         if self.proximal_bias:
             assert t_s == t_t, "Proximal bias is only available for self-attention."
             scores = scores + \
-                self._attention_bias_proximal(t_s).to(
-                    device=scores.device, dtype=scores.dtype)
+                self._attention_bias_proximal(t_s).to(device=scores.device, dtype=scores.dtype)
         if mask is not None:
+            # Replace masked scores with a large negative value
             scores = scores.masked_fill(mask == 0, -1e4)
             if self.block_length is not None:
                 assert t_s == t_t, "Local attention is only available for self-attention."
-                block_mask = torch.ones_like(
-                    scores).triu(-self.block_length).tril(self.block_length)
+                block_mask = torch.ones_like(scores).triu(-self.block_length).tril(self.block_length)
                 scores = scores.masked_fill(block_mask == 0, -1e4)
         p_attn = F.softmax(scores, dim=-1)  # [b, n_h, t_t, t_s]
         p_attn = self.drop(p_attn)
+
+        # 将注意力矩阵和value做矩阵乘法。得到输出后，视情况加入相对位置偏移
         output = torch.matmul(p_attn, value)
         if self.window_size is not None:
-            relative_weights = self._absolute_position_to_relative_position(
-                p_attn)
-            value_relative_embeddings = self._get_relative_embeddings(
-                self.emb_rel_v, t_s)
+            relative_weights = self._absolute_position_to_relative_position(p_attn)
+            value_relative_embeddings = self._get_relative_embeddings(self.emb_rel_v, t_s)
             output = output + \
-                self._matmul_with_relative_values(
-                    relative_weights, value_relative_embeddings)
-        output = output.transpose(2, 3).contiguous().view(
-            b, d, t_t)  # [b, n_h, t_t, d_k] -> [b, d, t_t]
+                self._matmul_with_relative_values(relative_weights, value_relative_embeddings)
+        output = output.transpose(2, 3).contiguous().view(b, d, t_t)  # [b, n_h, t_t, d_k] -> [b, d, t_t]
         return output, p_attn
+        # 给chatGPT看: 请给上面的代码加上合适的注释，要求注释不要单纯复述函数名的功能，简单的结构逻辑也不用赘述。需要注释能反应对应的代码的目的，以及根据深度学习为什么
 
     def _matmul_with_relative_values(self, x, y):
         """
@@ -216,14 +212,19 @@ class MultiHeadAttention(nn.Module):
         return ret
 
     def _get_relative_embeddings(self, relative_embeddings, length):
-        max_relative_position = 2 * self.window_size + 1
+        """
+        根据输入序列的长度和窗口大小，从一个给定的相对嵌入矩阵中获取对应的嵌入向量
+        """
+        # max_relative_position = 2 * self.window_size + 1
+
+        # 根据输入序列的长度，计算需要在相对嵌入矩阵前后填充的长度，以及需要截取的相对嵌入矩阵的起始和结束位置
         # Pad first before slice to avoid using cond ops.
         pad_length = max(length - (self.window_size + 1), 0)
         slice_start_position = max((self.window_size + 1) - length, 0)
         slice_end_position = slice_start_position + 2 * length - 1
+        # 根据填充的长度，对相对嵌入矩阵进行填充
         if pad_length > 0:
-            padded_relative_embeddings = F.pad(
-                relative_embeddings,
+            padded_relative_embeddings = F.pad(relative_embeddings,
                 commons.convert_pad_shape([[0, 0], [pad_length, pad_length], [0, 0]]))
         else:
             padded_relative_embeddings = relative_embeddings
@@ -237,13 +238,15 @@ class MultiHeadAttention(nn.Module):
         """
         batch, heads, length, _ = x.size()
         # Concat columns of pad to shift from relative to absolute indexing.
+        # [b, h, l, 2*l-1] => [b, h, l, 2*l]
         x = F.pad(x, commons.convert_pad_shape([[0, 0], [0, 0], [0, 0], [0, 1]]))
 
         # Concat extra elements so to add up to shape (len+1, 2*len-1).
-        x_flat = x.view([batch, heads, length * 2 * length])
-        x_flat = F.pad(x_flat, commons.convert_pad_shape([[0, 0], [0, 0], [0, length-1]]))
+        x_flat = x.view([batch, heads, length*2*length]) # [b, h, l*2*l]
+        x_flat = F.pad(x_flat, commons.convert_pad_shape([[0, 0], [0, 0], [0, length-1]])) # [..., 2*l*l+l-1]
 
         # Reshape and slice out the padded elements.
+        # [..., 2*l*l+l-1] => [..., l+1, 2*l-1]
         x_final = x_flat.view([batch, heads, length+1, 2*length-1])[:, :, :length, length-1:]
         return x_final
 
@@ -264,7 +267,9 @@ class MultiHeadAttention(nn.Module):
         return x_final
 
     def _attention_bias_proximal(self, length):
-        """Bias for self-attention to encourage attention to close positions.
+        """
+        Bias for self-attention to encourage attention to close positions.
+        生成length*length大小的单位矩阵, 但是模糊化。作为邻近元素的偏置
         Args:
           length: an integer scalar.
         Returns:
