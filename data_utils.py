@@ -7,7 +7,6 @@ import torch.utils.data
 
 import commons 
 from mel_processing import spectrogram_torch
-from utils import load_wav_to_torch
 import text
 
 from speechbrain.pretrained import EncoderClassifier  # 增加依赖链有风险

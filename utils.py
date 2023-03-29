@@ -8,7 +8,6 @@ import shutil
 import importlib
 import subprocess
 import time
-import distro
 
 MATPLOTLIB_FLAG = False
 
@@ -123,7 +122,9 @@ custom_domains = {0}
 def install_whisper():
     run_pip('install -U openai-whisper', 'openai-whisper')
     run_pip('install git+https://github.com/openai/whisper.git', desc='whisper')
+    run_pip('install -U distro', 'distro')
     import platform
+    import distro
     if platform.system() == 'Linux':
         if distro.id() == 'centos':
             run('sudo yum update && sudo yum install ffmpeg', desc="ffmpeg")
