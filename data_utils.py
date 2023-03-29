@@ -58,7 +58,6 @@ def prepare_data(hparams, skip=False):
         result = '#'+('#'.join([t['text'] for t in result_dict['segments']]))+'#'
 
         phonemes = text.pypinyin_g2p(result)
-        phoneme_data.append(phonemes)  # 这个地方应该很容易报错，要多加关注
 
         text_file.write(audio_file + '|' + result + '\n')  
         phoneme_file.write(audio_file + '|' + phonemes + '\n')  # 保存临时结果
