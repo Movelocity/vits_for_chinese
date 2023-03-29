@@ -38,7 +38,8 @@ def prepare_data(hparams, skip=False):
     print('加载成功')
 
     audio_files = glob.glob("dataset/wave_data/*.wav")
-    names = [f.split('/')[-1] for f in audio_files]
+    rel_path = os.getcwd()
+    audio_files = [p.replace(rel_path, '') for p in audio_files]
 
     ok_list = []
     with open('dataset/phonemes.txt', 'r', encoding='utf-8') as f:
@@ -47,34 +48,35 @@ def prepare_data(hparams, skip=False):
             for line in lines:
                 ok_list.append(line.strip().split("|")[0])
     
+    print("自动语音识别中...")
     text_file = open('dataset/text.txt', 'a', encoding='utf-8')
     phoneme_file = open('dataset/phonemes.txt', 'a', encoding='utf-8')
-    for name in names:
-        if name in ok_list: continue
+    for audio_file in audio_files:
+        if skip and audio_file in ok_list: continue
         # 要重采样到16000
-        result_dict = model.transcribe('dataset/wave_data/'+audio_file)  # 内置语音转文字就不用另外写cleaner了
+        result_dict = model.transcribe(audio_file)  # 内置语音转文字就不用另外写cleaner了
         result = '#'+('#'.join([t['text'] for t in result_dict['segments']]))+'#'
 
         phonemes = text.pypinyin_g2p(result)
         phoneme_data.append(phonemes)  # 这个地方应该很容易报错，要多加关注
 
-        text_file.write(name + '|' + result + '\n')  
-        phoneme_file.write(name + '|' + phonemes + '\n')  # 保存临时结果
+        text_file.write(audio_file + '|' + result + '\n')  
+        phoneme_file.write(audio_file + '|' + phonemes + '\n')  # 保存临时结果
 
     text_file.close()
     phoneme_file.close()
     print('数据集语音识别结果已保存在 dataset/text.txt')
 
     print('尝试生成声纹编码和频谱图')
-    audio, sr = torchaudio.load(name)
+    audio, sr = torchaudio.load(audio_file)
     resampler = T.Resample(sr, new_freq=16000, dtype=audio.dtype)  # 数据最好是同样采样率的，不然会出错
-    for name in names:
-        emebed_file = 'dataset/embed/'+name.replace('.wav', '.emb.pt')
-        spec_file = 'dataset/spec/'+name.replace('.wav', '.spec.pt')
+    for audio_file in audio_files:
+        emebed_file = audio_file.replace("dataset/wave_data/", 'dataset/embed/').replace('.wav', '.emb.pt')
+        spec_file = audio_file.replace("dataset/wave_data/", 'dataset/spec/').replace('.wav', '.spec.pt')
         # 可以指定 skip=True 来跳过已经处理过的文件
         if skip and os.path.exists(emebed_file) and os.path.exists(spec_file): continue
 
-        audio, sr = torchaudio.load(name)
+        audio, sr = torchaudio.load(audio_file)
         audio_16k = resampler(audio) if sr != 16000 else audio
         embedding = speaker_classifier.encode_batch(audio_16k)[0, 0]
         embedding = embedding / torch.norm(embedding)
