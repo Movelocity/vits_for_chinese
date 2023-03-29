@@ -233,18 +233,18 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
 
-    load_model(net_g, os.path.join(ckpt_folder, 'generator.ckpt'))
-    load_model(net_d, os.path.join(ckpt_folder, 'discriminator.ckpt'))
+    load_model(net_g, f'{ckpt_folder}/generator.ckpt')
+    load_model(net_d, f'{ckpt_folder}/discriminator.ckpt')
 
     try:
-        optim_g.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_g')))
-        optim_d.load_state_dict(torch.load(os.path.join(ckpt_folder, 'optim_d')))
+        optim_g.load_state_dict(torch.load(f'{ckpt_folder}/optim_g'))
+        optim_d.load_state_dict(torch.load(f'{ckpt_folder}/optim_d'))
     except ValueError:
         print('优化器加载失败，使用随机初始化...')
 
-    info = torch.load(os.path.join(ckpt_folder, 'info.pt'))
+    info = torch.load(f'{ckpt_folder}info.pt')
     learning_rate, epoch = info['learning_rate'], info['epoch']
-    logger.info("Loaded checkpoint '{}' (epoch {})" .format(ckpt_folder, epoch))
+    logger.info(f"Loaded checkpoint '{ckpt_folder}' (epoch {epoch})")
     return learning_rate, epoch
 
 
@@ -267,7 +267,7 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
     
     感觉模型过拟合的时候，可以手动删掉过拟合的文件夹，然后重新启动训练
     """
-    checkpoint_folder = os.path.join(model_dir, f'epoch_{epoch}')
+    checkpoint_folder = f'epoch_{epoch}'
 
     logger.info("Saving ckpt to {}".format(checkpoint_folder))
 
@@ -284,12 +284,12 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
         'optim_d': optim_d.state_dict()
     }
     for k, v in savelist.items():
-        torch.save(v, os.path.join(checkpoint_folder, k))
+        torch.save(v, f'{checkpoint_folder}/{k}')
 
-    torch.save({'learning_rate': learning_rate, 'epoch': epoch}, os.path.join(checkpoint_folder, 'info.pt'))
+    torch.save({'learning_rate': learning_rate, 'epoch': epoch},  f'{checkpoint_folder}/info.pt')
 
     # 删除旧的检查点
-    folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
+    folders = glob.glob(f'{model_dir}/epoch_*')
     folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
     if len(folders) > 2:
         shutil.rmtree(folders[0])    #递归删除文件夹
@@ -358,8 +358,6 @@ def plot_alignment_to_numpy(alignment, info=None):
   data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
   plt.close()
   return data
-
-
 
 def get_hparams(args):
     model_dir = os.path.join("./logs", args.model)

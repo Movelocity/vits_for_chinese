@@ -8,23 +8,82 @@ import torch.utils.data
 import commons 
 from mel_processing import spectrogram_torch
 from utils import load_wav_to_torch
-from text import tokens2ids
+import text
 
 from speechbrain.pretrained import EncoderClassifier  # 增加依赖链有风险
-speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
 
 import torchaudio
 import torchaudio.transforms as T
 
-def load_filepaths_and_text(filename, split="|"):
-    with open(filename, encoding='utf-8') as f:
-        filepaths_and_text = []
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def load_filenames_and_text(textfile, split="|"):
+    with open(textfile, encoding='utf-8') as f:
+        fnames_and_text = []
         for line in f:
             if split not in line: continue
             path_text = line.strip().split(split)
-            filepaths_and_text.append(path_text)
-    return filepaths_and_text
+            fnames_and_text.append(path_text)
+    return fnames_and_text
 
+def prepare_data(hparams, skip=False):
+    """如果要重新识别语音，可以手动删除原有记录"""
+    import whisper
+    import glob
+    print('正在加载 whisper 语音识别模型...')
+    model = whisper.load_model("base").to(device)
+    print('加载成功')
+
+    print("正在加载 ecapa 声纹编码模型...")
+    speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+    print('加载成功')
+
+    audio_files = glob.glob("dataset/wave_data/*.wav")
+    names = [f.split('/')[-1] for f in audio_files]
+
+    ok_list = []
+    with open('dataset/phonemes.txt', 'r', encoding='utf-8') as f:
+        lines = f.read().split('\n')
+        if len(lines) > 2:
+            for line in lines:
+                ok_list.append(line.strip().split("|")[0])
+    
+    text_file = open('dataset/text.txt', 'a', encoding='utf-8')
+    phoneme_file = open('dataset/phonemes.txt', 'a', encoding='utf-8')
+    for name in names:
+        if name in ok_list: continue
+        # 要重采样到16000
+        result_dict = model.transcribe('dataset/wave_data/'+audio_file)  # 内置语音转文字就不用另外写cleaner了
+        result = '#'+('#'.join([t['text'] for t in result_dict['segments']]))+'#'
+
+        phonemes = text.pypinyin_g2p(result)
+        phoneme_data.append(phonemes)  # 这个地方应该很容易报错，要多加关注
+
+        text_file.write(name + '|' + result + '\n')  
+        phoneme_file.write(name + '|' + phonemes + '\n')  # 保存临时结果
+
+    text_file.close()
+    phoneme_file.close()
+    print('数据集语音识别结果已保存在 dataset/text.txt')
+
+    print('尝试生成声纹编码和频谱图')
+    audio, sr = torchaudio.load(name)
+    resampler = T.Resample(sr, new_freq=16000, dtype=audio.dtype)  # 数据最好是同样采样率的，不然会出错
+    for name in names:
+        emebed_file = 'dataset/embed/'+name.replace('.wav', '.emb.pt')
+        spec_file = 'dataset/spec/'+name.replace('.wav', '.spec.pt')
+        # 可以指定 skip=True 来跳过已经处理过的文件
+        if skip and os.path.exists(emebed_file) and os.path.exists(spec_file): continue
+
+        audio, sr = torchaudio.load(name)
+        audio_16k = resampler(audio) if sr != 16000 else audio
+        embedding = speaker_classifier.encode_batch(audio_16k)[0, 0]
+        embedding = embedding / torch.norm(embedding)
+        torch.save(embedding, emebed_file)
+
+        spectrogram = spectrogram_torch(audio, n_fft=hparams.filter_length, sampling_rate=hparams.sampling_rate,
+                        hop_size=hparams.hop_length, win_size=hparams.win_length, center=False)[0]
+        torch.save(spectrogram, spec_file)
 
 
 """Multi speaker version"""
@@ -34,10 +93,10 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         2) normalizes text and converts them to sequences of integers
         3) computes spectrograms from audio files.
     """
-    def __init__(self, audiopaths_sid_text, hparams):
-        self.audiopaths_sid_text = load_filepaths_and_text(audiopaths_sid_text)
+    def __init__(self, hparams):
+        self.audiopaths_sid_text = load_filenames_and_text('dataset/phonemes.txt')
         # self.max_wav_value = 32768.0
-        self.sampling_rate = hparams.sampling_rate
+        self.sr = hparams.sampling_rate
         self.filter_length = hparams.filter_length
         self.hop_length    = hparams.hop_length
         self.win_length    = hparams.win_length
@@ -52,9 +111,6 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         random.shuffle(self.audiopaths_sid_text)
         self._filter()
 
-        if sampling_rate != 16000:
-            self.resampler = T.Resample(sampling_rate, new_freq=16000, dtype=waveform.dtype)
-
     def _filter(self):
         """
         Filter text & store spec lengths
@@ -64,7 +120,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         # spec_length = wav_length // hop_length
         audiopaths_sid_text_new = []
         lengths = []
-        for audiopath, sid, text in self.audiopaths_sid_text:
+        for audiopath, embed, text in self.audiopaths_sid_text:
             if self.min_text_len <= len(text) and len(text) <= self.max_text_len:
                 audiopaths_sid_text_new.append([audiopath, sid, text])
                 lengths.append(os.path.getsize(audiopath) // (2 * self.hop_length))
@@ -78,33 +134,18 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         audio, spec, embed = self.get_audio_spec_emb(audiopath)
         return (text, spec, audio, embed)
 
-    def get_audio_spec_emb(self, filename):
-        audio, sr = torchaudio.load(filename)
+    def get_audio_spec_emb(self, name):
+        audio, sr = torchaudio.load('dataset/wave_data/'+name)
         if sr != self.sampling_rate:
-            raise ValueError("{} {} SR doesn't match target {} SR".format(sr, self.sampling_rate))
-
-        spec_filename = filename.replace(".wav", ".spec.pt")
-        if os.path.exists(spec_filename):
-            spec =  torch.load(spec_filename)
-        else:
-            spec = spectrogram_torch(audio, n_fft=self.filter_length, sampling_rate=self.sampling_rate,
-                hop_size=self.hop_length, win_size=self.win_length, center=False)
-            spec = torch.squeeze(spec, 0)
-            torch.save(spec, spec_filename)
-
-        emb_filename = filename.replace(".wav", ".emb.pt")
-        if os.path.exists(emb_filename):
-            embed =  torch.load(emb_filename)
-        else:
-            audio_16k = self.resampler(audio) if sr > 16000 else audio
-            embed = speaker_classifier.encode_batch(audio_16k)[0, 0]
-            torch.save(embed, spec_filename)
+            raise ValueError("{} {} SR doesn't match target {} SR".format(sr, self.sr))
+        emebed_file = 'dataset/embed/'+name.replace('.wav', '.emb.pt')
+        spec_file = 'dataset/spec/'+name.replace('.wav', '.spec.pt')
+        spec =  torch.load(spec_file)
+        embed =  torch.load(emebed_file)
         return audio, spec, embed
 
     def get_text(self, text):
-        text_norm = tokens2ids(text)
-        if self.add_blank:
-            text_norm = commons.intersperse(text_norm, 0)
+        text_norm = text.tokens2ids(text)
         text_norm = torch.LongTensor(text_norm)
         return text_norm
 

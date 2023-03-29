@@ -22,6 +22,7 @@ def convert_pad_shape(pad_shape):
 
 
 def intersperse(lst, item):
+    """token list 中间插空, 首尾也插空"""
     result = [item] * (len(lst) * 2 + 1)
     result[1::2] = lst
     return result

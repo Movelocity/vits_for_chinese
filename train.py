@@ -43,8 +43,7 @@ def train(hps):
     writer = SummaryWriter(log_dir=os.path.join(hps.model_dir, "train"))
     writer_eval = SummaryWriter(log_dir=os.path.join(hps.model_dir, "eval"))
 
-    train_dataset = TextAudioSpeakerLoader(hps.data.training_files, hps.data)
-
+    train_dataset = TextAudioSpeakerLoader(hparams=hps.data)
     train_sampler = DistributedBucketSampler(
         train_dataset,
         hps.train.batch_size,
@@ -66,11 +65,12 @@ def train(hps):
     #     collate_fn=collate_fn
     # )
     net_g = SynthesizerTrn(
-        len(text.symbols),
-        hps.data.filter_length // 2 + 1,
-        hps.train.segment_size // hps.data.hop_length,
+        n_vocab=len(text.symbols),
+        spec_channels=hps.data.filter_length // 2 + 1,
+        segment_size=hps.train.segment_size // hps.data.hop_length,
         n_speakers=hps.data.n_speakers,
         **hps.model).cuda()
+
     net_d = MultiPeriodDiscriminator(hps.model.use_spectral_norm).cuda()
     optim_g = torch.optim.AdamW(
         net_g.parameters(),
