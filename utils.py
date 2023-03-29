@@ -161,7 +161,7 @@ def install_basic():
         print("Exiting because of --exit argument")
         exit(0)
 
-prepare_env()
+install_basic()
 
 import torch
 def load_model(model, saved_state_dict):
