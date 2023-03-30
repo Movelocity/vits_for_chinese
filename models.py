@@ -153,7 +153,7 @@ class ResidualCouplingBlock(nn.Module):
     # 来自 WaveGlow
     # flow-based model. 数据可以双向流动，只有一个方向需要学习，另一个方向可以推算出来
     def __init__(self, channels, hidden_channels, kernel_size, dilation_rate,
-        n_layers, n_flows=4, emb_dim=192
+        n_layers, n_flows=4, embed_dim=192
     ):
         super().__init__()
 
@@ -162,7 +162,7 @@ class ResidualCouplingBlock(nn.Module):
             self.flows.append(
                 modules.ResidualCouplingLayer(
                     channels, hidden_channels, kernel_size, dilation_rate,
-                    n_layers, emb_dim=emb_dim, mean_only=True)
+                    n_layers, embed_dim=embed_dim, mean_only=True)
             )
             self.flows.append(modules.Flip())
 
@@ -388,7 +388,7 @@ class SynthesizerTrn(nn.Module):
                  upsample_initial_channel,
                  upsample_kernel_sizes,
                  n_speakers=1,
-                 emb_dim=192,
+                 embed_dim=192,
                  use_sdp=True,
                  **kwargs):
 
@@ -401,17 +401,17 @@ class SynthesizerTrn(nn.Module):
             n_heads, n_layers, kernel_size, p_dropout)
 
         self.dec = WaveGenerator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes,
-            upsample_rates, upsample_initial_channel, upsample_kernel_sizes, emb_dim=emb_dim)
+            upsample_rates, upsample_initial_channel, upsample_kernel_sizes, embed_dim=embed_dim)
 
-        self.enc_q = PosteriorEncoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16, emb_dim=emb_dim)
+        self.enc_q = PosteriorEncoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16, embed_dim=embed_dim)
 
-        self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, emb_dim=emb_dim)
+        self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, embed_dim=embed_dim)
 
         if use_sdp:
             self.dp = StochasticDurationPredictor(in_channels=hidden_channels, filter_channels=192, 
-                kernel_size=3, p_dropout=0.5, n_flows=4, emb_dim=emb_dim)
+                kernel_size=3, p_dropout=0.5, n_flows=4, embed_dim=embed_dim)
         else:
-            self.dp = DurationPredictor(hidden_channels, 256, 3, 0.5, emb_dim=emb_dim)
+            self.dp = DurationPredictor(hidden_channels, 256, 3, 0.5, embed_dim=embed_dim)
 
     def forward(self, x, x_lengths, y, y_lengths, embed):
         # x: 文本编码；y: 语音频谱
