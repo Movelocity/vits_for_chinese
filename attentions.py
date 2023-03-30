@@ -46,6 +46,9 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
+    """
+    适用于语音序列数据的Transformer解码器
+    """
     def __init__(
         self, 
         hidden_channels, 

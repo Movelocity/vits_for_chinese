@@ -166,6 +166,27 @@ class WN(torch.nn.Module):
         for l in self.res_skip_layers:
             torch.nn.utils.remove_weight_norm(l)
 
+# """
+# "upsample_initial_channel": 512,
+# "resblock_kernel_sizes": [3, 7, 11],
+# "resblock_dilation_sizes": [[1,3,5], [1,3,5], [1,3,5]],
+
+# Conv1d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1)
+# norm()
+# Conv1d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=3, dilation=3)
+# norm()
+# Conv1d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=5, dilation=5)
+# norm()
+
+# Conv1d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1)
+# norm()
+# Conv1d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1)
+# norm()
+# Conv1d(in_channels=512, out_channels=512, kernel_size=3, stride=1, padding=1, dilation=1)
+# norm()
+
+# 推理的时候交叉使用
+# """
 class ResBlock1(torch.nn.Module):
     def __init__(self, channels, kernel_size=3, dilation=(1, 3, 5)):
         super(ResBlock1, self).__init__()

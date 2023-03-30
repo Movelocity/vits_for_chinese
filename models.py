@@ -13,7 +13,6 @@ from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
 from commons import init_weights, get_padding
 
-
 class StochasticDurationPredictor(nn.Module):
     def __init__(self, in_channels, filter_channels, kernel_size, p_dropout, n_flows=4, embed_dim=192):
         super().__init__()
@@ -200,7 +199,13 @@ class PosteriorEncoder(nn.Module):
         z = (m + torch.randn_like(logs)*torch.exp(logs)) * x_mask  # VAE reparametrization
         return z, m, logs, x_mask
 
+"""
+upsample_rates = [8, 8, 2, 2]
+upsample_kernel_sizes = [16, 16, 4, 4]
+upsample_initial_channel = 512
 
+ConvTranspose1d(512, 256)
+"""
 class WaveGenerator(torch.nn.Module):
     def __init__(
         self, initial_channel, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, 
@@ -230,7 +235,6 @@ class WaveGenerator(torch.nn.Module):
                 self.resblocks.append(resblock(channels=ch, kernel_size=k, dilation=d))
 
         self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=False)
-        
         self.cond = nn.Sequential(
             nn.Linear(embed_dim, hidden_channels),
             nn.Sigmoid(),

@@ -198,23 +198,18 @@ def from_pretrained(hps, model, link):
         saved_state_dict = ld_ckpt
 
     state_dict = model.state_dict()
-    init_speaker_emb, init_vocab_emb = False, False
+    init_vocab_emb = False
 
     try:
         if model.state_dict()['enc_p.emb.weight'].shape != saved_state_dict['enc_p.emb.weight'].shape:
             init_vocab_emb = True
-        if model.state_dict()['emb_g.weight'].shape != saved_state_dict['emb_g.weight'].shape:
-            init_speaker_emb = True
     except:
-        init_speaker_emb = True
+        pass
 
     new_state_dict= {}
     for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
-        if k=='emb_g.weight' and init_speaker_emb:
-            new_state_dict[k] = torch.randn(hps.data.n_speakers, hps.model.gin_channels)
-            torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.gin_channels**-0.5)
-            print('Randomly init speaker embeddings.')
-        elif k=='enc_p.emb.weight' and init_vocab_emb:
+
+        if k=='enc_p.emb.weight' and init_vocab_emb:
             import text
             new_state_dict[k] = torch.randn(len(text.symbols), hps.model.hidden_channels)
             torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.hidden_channels**-0.5)
