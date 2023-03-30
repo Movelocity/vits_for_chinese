@@ -236,10 +236,10 @@ class WaveGenerator(torch.nn.Module):
 
         self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=False)
         self.cond = nn.Sequential(
-            nn.Linear(embed_dim, hidden_channels),
+            nn.Linear(embed_dim, 256),
             nn.Sigmoid(),
-            nn.Linear(hidden_channels, upsample_initial_channel),
-            nn.Sigmoid()
+            nn.Linear(256, upsample_initial_channel),
+            nn.Tanh()
         )
 
     def forward(self, x, embed):
