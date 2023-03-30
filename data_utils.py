@@ -69,21 +69,21 @@ def prepare_data(hparams, skip=False):
         audio = audio.to(device)
         audio_16k = audio  if sr == 16000 else resampler(audio)
 
-        if skip and not os.path.exists(emebed_file):
+        if not skip and not os.path.exists(emebed_file):
             embedding = speaker_classifier.encode_batch(audio_16k)[0, 0]
             embedding = embedding / torch.norm(embedding)
             target_dir = os.path.dirname(emebed_file)  # 先确保目录存在
             os.makedirs(target_dir, exist_ok=True)
             torch.save(embedding, emebed_file)
 
-        if skip and not os.path.exists(spec_file):
+        if not skip and not os.path.exists(spec_file):
             spectrogram = spectrogram_torch(audio, n_fft=hparams.filter_length, sampling_rate=hparams.sampling_rate,
                             hop_size=hparams.hop_length, win_size=hparams.win_length, center=False)[0]
             target_dir = os.path.dirname(spec_file)  # 先确保目录存在
             os.makedirs(target_dir, exist_ok=True)
             torch.save(spectrogram, spec_file)
 
-        if skip and audio_file not in ok_list:
+        if not skip and audio_file not in ok_list:
             audio_16k = whisper.pad_or_trim(audio_16k.flatten()).to(device)
             mel = whisper.log_mel_spectrogram(audio)
             result = model.decode(mel, options).text
