@@ -34,7 +34,7 @@ def prepare_data(hparams, skip=False):
     print('加载成功')
 
     print("正在加载 ecapa 声纹编码模型...")
-    speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
+    speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb").to(device)
     print('加载成功')
 
     audio_files = glob.glob("dataset/wave_data/*.wav")+glob.glob("dataset/wave_data/*/*.wav")
@@ -50,12 +50,12 @@ def prepare_data(hparams, skip=False):
     
     print("自动语音识别中...")
 
-    _, sr = torchaudio.load(audio_files[0]).to(device)
+    audio, sr = torchaudio.load(audio_files[0])
     if sr == 16000:
         resampler = None
     else:
         # 为了提高批量处理效率使用预先准备的重采样器。所以数据最好是相同采样率的，不然会出错
-        resampler = T.Resample(sr, new_freq=16000, dtype=audio.dtype)
+        resampler = T.Resample(sr, new_freq=16000, dtype=audio.dtype).to(device)
 
     options = whisper.DecodingOptions(language="zh", without_timestamps=True)
     text_file = open('dataset/text.txt', 'a', encoding='utf-8')
