@@ -133,9 +133,9 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         # spec_length = wav_length // hop_length
         audiopaths_text_new = []
         lengths = []
-        for audiopath, text in self.audiopaths_text:
+        for audiopath, phonemes in self.audiopaths_text:
             if self.min_text_len <= len(text) and len(text) <= self.max_text_len:
-                text_norm = text.tokens2ids(text)
+                text_norm = text.tokens2ids(phonemes)
                 text_norm = torch.LongTensor(text_norm)
 
                 audiopaths_text_new.append([audiopath, text_norm])

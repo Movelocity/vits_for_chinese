@@ -18,8 +18,7 @@ from torch.cuda.amp import autocast, GradScaler
 from data_utils import (
     TextAudioSpeakerLoader,
     TextAudioSpeakerCollate,
-    DistributedBucketSampler,
-    load_filepaths_and_text
+    DistributedBucketSampler
 )
 from models import (
     SynthesizerTrn,
