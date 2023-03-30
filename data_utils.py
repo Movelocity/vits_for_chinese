@@ -13,6 +13,7 @@ from speechbrain.pretrained import EncoderClassifier  # 增加依赖链有风险
 
 import torchaudio
 import torchaudio.transforms as T
+import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -25,6 +26,7 @@ def load_filenames_and_text(textfile, split="|"):
             fnames_and_text.append(path_text)
     return fnames_and_text
 
+@torch.no_grad()
 def prepare_data(hparams, redo=False):
     """如果要重新识别语音，可以手动删除原有记录"""
     import whisper
@@ -34,7 +36,8 @@ def prepare_data(hparams, redo=False):
     print('加载成功')
 
     print("正在加载 ecapa 声纹编码模型...")
-    speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb").to(device)
+    # 这个库在cuda模式报错，原因不明，所以使用cpu版本
+    speaker_classifier = EncoderClassifier.from_hparams(source="speechbrain/spkrec-ecapa-voxceleb")
     print('加载成功')
 
     audio_files = glob.glob("dataset/wave_data/*.wav")+glob.glob("dataset/wave_data/*/*.wav")
@@ -55,6 +58,7 @@ def prepare_data(hparams, redo=False):
         resampler = None
     else:
         # 为了提高批量处理效率使用预先准备的重采样器。所以数据最好是相同采样率的，不然会出错
+        # 如果你的音频数据集有多种采样率的文件，那么你可以考虑自己写一个存储多种Resampler的模块池
         resampler = T.Resample(sr, new_freq=16000, dtype=audio.dtype).to(device)
 
     options = whisper.DecodingOptions(language="zh", without_timestamps=True)
@@ -70,7 +74,7 @@ def prepare_data(hparams, redo=False):
         audio_16k = audio  if sr == 16000 else resampler(audio)
 
         if redo or not os.path.exists(emebed_file):
-            embedding = speaker_classifier.encode_batch(audio_16k)[0, 0]
+            embedding = speaker_classifier.encode_batch(audio_16k.cpu())[0, 0]
             embedding = embedding / torch.norm(embedding)
             target_dir = os.path.dirname(emebed_file)  # 先确保目录存在
             os.makedirs(target_dir, exist_ok=True)
@@ -81,7 +85,7 @@ def prepare_data(hparams, redo=False):
                             hop_size=hparams.hop_length, win_size=hparams.win_length, center=False)[0]
             target_dir = os.path.dirname(spec_file)  # 先确保目录存在
             os.makedirs(target_dir, exist_ok=True)
-            torch.save(spectrogram, spec_file)
+            torch.save(spectrogram.cpu(), spec_file)
 
         if redo or not audio_file not in ok_list:
             audio_16k = whisper.pad_or_trim(audio_16k.flatten()).to(device)
