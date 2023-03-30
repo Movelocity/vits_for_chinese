@@ -118,7 +118,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
 
         self.add_blank = False
         self.min_text_len = getattr(hparams, "min_text_len", 1)
-        self.max_text_len = getattr(hparams, "max_text_len", 190)
+        self.max_text_len = getattr(hparams, "max_text_len", 300)
 
         # random.seed(1234)
         random.shuffle(self.audiopaths_text)
@@ -134,7 +134,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         audiopaths_text_new = []
         lengths = []
         for audiopath, phonemes in self.audiopaths_text:
-            if self.min_text_len <= len(text) and len(text) <= self.max_text_len:
+            if self.min_text_len <= len(phonemes) <= self.max_text_len:
                 text_norm = text.tokens2ids(phonemes)
                 text_norm = torch.LongTensor(text_norm)
 
