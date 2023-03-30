@@ -79,7 +79,7 @@ def prepare_data(hparams, redo=False):
             os.makedirs(target_dir, exist_ok=True)
             torch.save(spectrogram.cpu(), spec_file)
 
-        if redo or audio_file not in ok_list:
+        if redo or not audio_file in ok_list:
             audio_16k = whisper.pad_or_trim(audio_16k.flatten()).to(device)
             mel = whisper.log_mel_spectrogram(audio_16k)
             result = model.decode(mel, options).text
