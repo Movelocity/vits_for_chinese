@@ -85,7 +85,7 @@ def prepare_data(hparams, redo=False):
 
         if redo or not audio_file not in ok_list:
             audio_16k = whisper.pad_or_trim(audio_16k.flatten()).to(device)
-            mel = whisper.log_mel_spectrogram(audio)
+            mel = whisper.log_mel_spectrogram(audio_16k)
             result = model.decode(mel, options).text
             phonemes = text.pypinyin_g2p(result)
             text_file.write(audio_file + '|' + result + '\n')  
