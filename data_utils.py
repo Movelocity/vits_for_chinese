@@ -65,8 +65,8 @@ def prepare_data(hparams, skip=False):
         spec_file = audio_file.replace("dataset/wave_data/", 'dataset/spec/').replace('.wav', '.spec.pt')
 
         # 要重采样到16000
-        audio, sr = torchaudio.load(audio_file).to(device)
-        
+        audio, sr = torchaudio.load(audio_file)
+        audio = audio.to(device)
         audio_16k = audio  if sr == 16000 else resampler(audio)
 
         if skip and not os.path.exists(emebed_file):
