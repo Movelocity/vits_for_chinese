@@ -17,15 +17,6 @@ import torch
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def load_filenames_and_text(textfile, split="|"):
-    with open(textfile, encoding='utf-8') as f:
-        fnames_and_text = []
-        for line in f:
-            if split not in line: continue
-            path_text = line.strip().split(split)
-            fnames_and_text.append(path_text)
-    return fnames_and_text
-
 @torch.no_grad()
 def prepare_data(hparams, redo=False):
     """如果要重新识别语音，可以手动删除原有记录"""
@@ -47,9 +38,9 @@ def prepare_data(hparams, redo=False):
     ok_list = []
     with open('dataset/phonemes.txt', 'r', encoding='utf-8') as f:
         lines = f.read().split('\n')
-        if len(lines) > 2:
-            for line in lines:
-                ok_list.append(line.strip().split("|")[0])
+        for line in lines:
+            if "|" not in line: continue
+            ok_list.append(line.strip().split("|")[0])
     
     print("自动语音识别中...")
 
@@ -64,7 +55,8 @@ def prepare_data(hparams, redo=False):
     options = whisper.DecodingOptions(language="zh", without_timestamps=True)
     text_file = open('dataset/text.txt', 'a', encoding='utf-8')
     phoneme_file = open('dataset/phonemes.txt', 'a', encoding='utf-8')
-    for audio_file in audio_files:
+    total_job = len(audio_files)
+    for i, audio_file in enumerate(audio_files):
         emebed_file = audio_file.replace("dataset/wave_data/", 'dataset/embed/').replace('.wav', '.emb.pt')
         spec_file = audio_file.replace("dataset/wave_data/", 'dataset/spec/').replace('.wav', '.spec.pt')
 
@@ -87,18 +79,27 @@ def prepare_data(hparams, redo=False):
             os.makedirs(target_dir, exist_ok=True)
             torch.save(spectrogram.cpu(), spec_file)
 
-        if redo or not audio_file not in ok_list:
+        if redo or audio_file not in ok_list:
             audio_16k = whisper.pad_or_trim(audio_16k.flatten()).to(device)
             mel = whisper.log_mel_spectrogram(audio_16k)
             result = model.decode(mel, options).text
             phonemes = text.pypinyin_g2p(result)
-            text_file.write(audio_file + '|' + result + '\n')  
+            text_file.write(audio_file + '|' + result + '\n')
             phoneme_file.write(audio_file + '|' + phonemes + '\n')  # 保存临时结果
 
+        print(f'\r{i/total_job}%', end='')
     text_file.close()
     phoneme_file.close()
     print('数据集语音识别结果已保存在 dataset/text.txt')
 
+def load_filenames_and_text(textfile, split="|"):
+    with open(textfile, encoding='utf-8') as f:
+        fnames_and_text = []
+        for line in f:
+            if split not in line: continue
+            path_text = line.strip().split(split)
+            fnames_and_text.append(path_text)
+    return fnames_and_text
 
 """Multi speaker version"""
 class TextAudioSpeakerLoader(torch.utils.data.Dataset):
@@ -147,7 +148,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         # separate filename, speaker_id and text
         audiopath, token_ids = audiopath_text[0], audiopath_text[1]
 
-        audio, sr = torchaudio.load(name)
+        audio, sr = torchaudio.load(audiopath)
         if sr != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(sr, self.sr))
         emebed_file = audio_file.replace("dataset/wave_data/", 'dataset/embed/').replace('.wav', '.emb.pt')
