@@ -116,7 +116,7 @@ class WN(torch.nn.Module):
             nn.Linear(embed_dim, hidden_channels),
             nn.Sigmoid(),
             nn.Linear(hidden_channels, 2*hidden_channels*n_layers),
-            nn.Sigmoid()
+            nn.Tanh()
         )
         # self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
 
@@ -226,6 +226,22 @@ class ResBlock1(torch.nn.Module):
         for l in self.convs2:
             remove_weight_norm(l)
 
+class MultiReceptiveField(torch.nn.Module):
+    """
+    MRF module from HifiGAN.
+    独立成一个模块, 方便以后替换掉
+    """
+    def __init__(self, in_channels, resblock_kernel_sizes, resblock_dilation_sizes):
+        self.resblocks = nn.ModuleList()
+        self.num_fields = len(resblock_kernel_sizes)
+        for k, d in zip(resblock_kernel_sizes, resblock_dilation_sizes):
+            self.resblocks.append(ResBlock1(channels=in_channels, kernel_size=k, dilation=d))
+
+    def forwawrd(self, x):
+        xs = self.resblocks[0](x)
+        for j in range(1, self.num_fields):  # Multi Receptive Field, apply summation
+            xs += self.resblocks[j](x)
+        return xs / self.num_fields
 
 # class ResBlock2(torch.nn.Module):
 #     def __init__(self, channels, kernel_size=3, dilation=(1, 3)):

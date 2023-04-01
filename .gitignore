@@ -1,4 +1,6 @@
 # Byte-compiled / optimized / DLL files
+monotonic_align/
+monotonic_align_copy/
 __pycache__/
 *.py[cod]
 *$py.class

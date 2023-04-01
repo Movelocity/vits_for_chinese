@@ -155,9 +155,12 @@ def install_basic():
     try:
         import monotonic_align
         monotonic_align.maximum_path
+        del monotonic_align
     except:
         print('正在编译monotonic_align模块')
-        run(f"cd monotonic_align; {python} setup.py build_ext --inplace; cd ..", live=True)
+        if not os.path.exists('monotonic_align/monotonic_align'):
+            os.mkdir('monotonic_align/monotonic_align')
+        run(f"cd monotonic_align && {python} setup.py build_ext --inplace && cd ..", live=True)
 
     if "--exit" in sys.argv:
         print("Exiting because of --exit argument")
@@ -218,8 +221,7 @@ def from_pretrained(hps, model, link):
     model.load_state_dict(new_state_dict, strict=False)
 
 def load_checkpoint(net_g, optim_g, net_d, optim_d, hps):
-    model_dir = hps.model_dir
-    folders = glob.glob(os.path.join(model_dir, 'epoch_*'))
+    folders = glob.glob('logs/model/epoch_*')
     if len(folders) == 0:
         return hps.train.learning_rate, 1
         # 暂时停用预训练下载，等我整理一下上传 w/o speaker_emb 的模型
@@ -294,75 +296,74 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
 
 
 def summarize(writer, global_step, scalars={}, histograms={}, images={}, audios={}, audio_sampling_rate=22050):
-  for k, v in scalars.items():
-    writer.add_scalar(k, v, global_step)
-  for k, v in histograms.items():
-    writer.add_histogram(k, v, global_step)
-  for k, v in images.items():
-    writer.add_image(k, v, global_step, dataformats='HWC')
-  for k, v in audios.items():
-    writer.add_audio(k, v, global_step, audio_sampling_rate)
+    for k, v in scalars.items():
+        writer.add_scalar(k, v, global_step)
+    for k, v in histograms.items():
+        writer.add_histogram(k, v, global_step)
+    for k, v in images.items():
+        writer.add_image(k, v, global_step, dataformats='HWC')
+    for k, v in audios.items():
+        writer.add_audio(k, v, global_step, audio_sampling_rate)
 
 def plot_spectrogram_to_numpy(spectrogram):
-  global MATPLOTLIB_FLAG
-  if not MATPLOTLIB_FLAG:
-    import matplotlib
-    matplotlib.use("Agg")
-    MATPLOTLIB_FLAG = True
-    mpl_logger = logging.getLogger('matplotlib')
-    mpl_logger.setLevel(logging.WARNING)
-  import matplotlib.pylab as plt
-  import numpy as np
-  
-  fig, ax = plt.subplots(figsize=(10,2))
-  im = ax.imshow(spectrogram, aspect="auto", origin="lower",
-                  interpolation='none')
-  plt.colorbar(im, ax=ax)
-  plt.xlabel("Frames")
-  plt.ylabel("Channels")
-  plt.tight_layout()
+    global MATPLOTLIB_FLAG
+    if not MATPLOTLIB_FLAG:
+        import matplotlib
+        matplotlib.use("Agg")
+        MATPLOTLIB_FLAG = True
+        mpl_logger = logging.getLogger('matplotlib')
+        mpl_logger.setLevel(logging.WARNING)
+    import matplotlib.pylab as plt
+    import numpy as np
+    
+    fig, ax = plt.subplots(figsize=(10,2))
+    im = ax.imshow(spectrogram, aspect="auto", origin="lower",
+                    interpolation='none')
+    plt.colorbar(im, ax=ax)
+    plt.xlabel("Frames")
+    plt.ylabel("Channels")
+    plt.tight_layout()
 
-  fig.canvas.draw()
-  data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-  plt.close()
-  return data
+    fig.canvas.draw()
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close()
+    return data
 
 def plot_alignment_to_numpy(alignment, info=None):
-  global MATPLOTLIB_FLAG
-  if not MATPLOTLIB_FLAG:
-    import matplotlib
-    matplotlib.use("Agg")
-    MATPLOTLIB_FLAG = True
-    mpl_logger = logging.getLogger('matplotlib')
-    mpl_logger.setLevel(logging.WARNING)
-  import matplotlib.pylab as plt
-  import numpy as np
+    global MATPLOTLIB_FLAG
+    if not MATPLOTLIB_FLAG:
+        import matplotlib
+        matplotlib.use("Agg")
+        MATPLOTLIB_FLAG = True
+        mpl_logger = logging.getLogger('matplotlib')
+        mpl_logger.setLevel(logging.WARNING)
+    import matplotlib.pylab as plt
+    import numpy as np
 
-  fig, ax = plt.subplots(figsize=(6, 4))
-  im = ax.imshow(alignment.transpose(), aspect='auto', origin='lower',
-                  interpolation='none')
-  fig.colorbar(im, ax=ax)
-  xlabel = 'Decoder timestep'
-  if info is not None:
-      xlabel += '\n\n' + info
-  plt.xlabel(xlabel)
-  plt.ylabel('Encoder timestep')
-  plt.tight_layout()
+    fig, ax = plt.subplots(figsize=(6, 4))
+    im = ax.imshow(alignment.transpose(), aspect='auto', origin='lower',
+                    interpolation='none')
+    fig.colorbar(im, ax=ax)
+    xlabel = 'Decoder timestep'
+    if info is not None:
+        xlabel += '\n\n' + info
+    plt.xlabel(xlabel)
+    plt.ylabel('Encoder timestep')
+    plt.tight_layout()
 
-  fig.canvas.draw()
-  data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
-  data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-  plt.close()
-  return data
+    fig.canvas.draw()
+    data = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    data = data.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    plt.close()
+    return data
 
-def get_hparams(args):
-    model_dir = os.path.join("./logs", args.model)
+def get_hparams():
+    model_dir = "./logs"
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
-    config_path = args.config
-    with open(config_path, "r") as f:
+    with open("configs/config.json", "r") as f:
         data = f.read()
     config = json.loads(data)
   
@@ -371,64 +372,64 @@ def get_hparams(args):
     return hparams
 
 def get_hparams_from_dir(model_dir):
-  config_save_path = os.path.join(model_dir, "config.json")
-  with open(config_save_path, "r") as f:
-    data = f.read()
-  config = json.loads(data)
+    config_save_path = os.path.join(model_dir, "config.json")
+    with open(config_save_path, "r") as f:
+        data = f.read()
+    config = json.loads(data)
 
-  hparams =HParams(**config)
-  hparams.model_dir = model_dir
-  return hparams
+    hparams =HParams(**config)
+    hparams.model_dir = model_dir
+    return hparams
 
 def get_hparams_from_file(config_path):
-  with open(config_path, "r") as f:
-    data = f.read()
-  config = json.loads(data)
+    with open(config_path, "r") as f:
+        data = f.read()
+    config = json.loads(data)
 
-  hparams =HParams(**config)
-  return hparams
+    hparams =HParams(**config)
+    return hparams
 
 def get_logger(model_dir, filename="train.log"):
-  global logger
-  logger = logging.getLogger(os.path.basename(model_dir))
-  logger.setLevel(logging.INFO)
-  
-  formatter = logging.Formatter("%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s")
-  if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
-  h = logging.FileHandler(os.path.join(model_dir, filename))
-  h.setLevel(logging.INFO)
-  h.setFormatter(formatter)
-  logger.addHandler(h)
-  return logger
+    global logger
+    logger = logging.getLogger(os.path.basename(model_dir))
+    logger.setLevel(logging.INFO)
+    
+    formatter = logging.Formatter("%(asctime)s\t%(name)s\t%(levelname)s\t%(message)s")
+    if not os.path.exists(model_dir):
+        os.makedirs(model_dir)
+    h = logging.FileHandler(os.path.join(model_dir, filename))
+    h.setLevel(logging.INFO)
+    h.setFormatter(formatter)
+    logger.addHandler(h)
+    return logger
 
 class HParams():
-  def __init__(self, **kwargs):
-    for k, v in kwargs.items():
-      if type(v) == dict:
-        v = HParams(**v)
-      self[k] = v
-    
-  def keys(self):
-    return self.__dict__.keys()
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            if type(v) == dict:
+                v = HParams(**v)
+            self[k] = v
+        
+    def keys(self):
+        return self.__dict__.keys()
 
-  def items(self):
-    return self.__dict__.items()
+    def items(self):
+        return self.__dict__.items()
 
-  def values(self):
-    return self.__dict__.values()
+    def values(self):
+        return self.__dict__.values()
 
-  def __len__(self):
-    return len(self.__dict__)
+    def __len__(self):
+        return len(self.__dict__)
 
-  def __getitem__(self, key):
-    return getattr(self, key)
+    def __getitem__(self, key):
+        return getattr(self, key)
 
-  def __setitem__(self, key, value):
-    return setattr(self, key, value)
+    def __setitem__(self, key, value):
+        return setattr(self, key, value)
 
-  def __contains__(self, key):
-    return key in self.__dict__
+    def __contains__(self, key):
+        return key in self.__dict__
 
-  def __repr__(self):
-    return self.__dict__.__repr__()
+    def __repr__(self):
+        return self.__dict__.__repr__()

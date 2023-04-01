@@ -57,12 +57,15 @@ def slice_segments(x, ids_str, segment_size=4):
 
 
 def rand_slice_segments(x, x_lengths=None, segment_size=4):
+    """
+    对于一个 batch 的序列数据, 分别从每个样本中裁取一个segment_size大小的片段
+    生成 ids_str 后调用了 slice_segments() 来获得具体片段
+    """
     b, d, t = x.size()
     if x_lengths is None:
         x_lengths = t
     ids_str_max = x_lengths - segment_size + 1
-    ids_str = (torch.rand([b]).to(device=x.device)
-               * ids_str_max).to(dtype=torch.long)
+    ids_str = (torch.rand([b]).to(device=x_lengths.device)* ids_str_max).to(dtype=torch.long)
     ret = slice_segments(x, ids_str, segment_size)
     return ret, ids_str
 

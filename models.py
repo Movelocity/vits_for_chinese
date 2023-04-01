@@ -45,13 +45,13 @@ class StochasticDurationPredictor(nn.Module):
         self.convs = modules.DDSConv(filter_channels, kernel_size, n_layers=3, p_dropout=p_dropout)
         self.cond = nn.Linear(embed_dim, filter_channels)
 
-    def forward(self, x, x_mask, w=None, embed=None, reverse=False, noise_scale=1.0):
+    def forward(self, x, x_mask, w=None, embed=None, training=False, noise_scale=1.0):
         x = self.pre(torch.detach(x))
         x += self.cond(torch.detach(embed)).unsqueeze(-1)
         x = self.convs(x, x_mask)
         x = self.proj(x) * x_mask
 
-        if not reverse:
+        if training:
             flows = self.flows
             assert w is not None
 
@@ -79,7 +79,7 @@ class StochasticDurationPredictor(nn.Module):
                 z, logdet = flow(z, x_mask, embed=x, reverse=reverse)
                 logdet_tot = logdet_tot + logdet
             nll = torch.sum(0.5 * (math.log(2*math.pi) + (z**2))* x_mask, [1, 2]) - logdet_tot
-            return nll + logq  # [b]
+            return nll + logq  # [b] 训练时直接返回Loss(batched)
         else:
             flows = list(reversed(self.flows))
             flows = flows[:-2] + [flows[-1]]  # remove a useless vflow
@@ -88,7 +88,7 @@ class StochasticDurationPredictor(nn.Module):
                 z = flow(z, x_mask, embed=x, reverse=reverse)
             z0, z1 = torch.split(z, [1, 1], 1)
             logw = z0
-            return logw
+            return logw  # 预测时返回时长预测值
 
 
 class DurationPredictor(nn.Module):
@@ -104,7 +104,8 @@ class DurationPredictor(nn.Module):
         self.proj = nn.Conv1d(filter_channels, 1, 1)
         self.cond = nn.Linear(embed_dim, in_channels)
 
-    def forward(self, x, x_mask, embed):
+    def forward(self, x, x_mask, embed, training=False, noise_scale=1):
+        # noise scale 参数仅作为占位，实际上不使用
         x = torch.detach(x)
         x += self.cond(torch.detach(embed)).unsqueeze(-1)
         x = self.conv_1(x * x_mask)
@@ -116,7 +117,13 @@ class DurationPredictor(nn.Module):
         x = self.norm_2(x)
         x = self.drop(x)
         x = self.proj(x * x_mask)
-        return x * x_mask
+        logw_pred = x * x_mask
+        if training:  
+            logw_calc = torch.log(w + 1e-6) * x_mask
+            # torch.sum(..., [1,2])使得损失值l_length保留了一个batch维度
+            return torch.sum((logw_pred-logw_calc)**2, [1, 2]) # 训练时直接返回Loss(batched)
+        else:  
+            return logw_pred  # 预测时返回时长预测值
 
 
 class TextEncoder(nn.Module):
@@ -176,7 +183,7 @@ class ResidualCouplingBlock(nn.Module):
         return x
 
 
-class PosteriorEncoder(nn.Module):
+class WaveEncoder(nn.Module):
     """
     音频侧的编码器。核心是WaveNet
     forward() 返回的最后一个是 mask, 因为处理的是 sequential data, 长短不一, 短的需要加mask。
@@ -187,7 +194,7 @@ class PosteriorEncoder(nn.Module):
         super().__init__()
         self.out_channels = out_channels
         self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
-        self.enc = modules.WN(hidden_channels, kernel_size,dilation_rate, n_layers, embed_dim=embed_dim)
+        self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers, embed_dim=embed_dim)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
     def forward(self, x, x_lengths, embed):
@@ -204,35 +211,34 @@ upsample_rates = [8, 8, 2, 2]
 upsample_kernel_sizes = [16, 16, 4, 4]
 upsample_initial_channel = 512
 
-ConvTranspose1d(512, 256)
+ConvTranspose1d(512, 256, kernel_size=16, stride=8, padding=4)
+sum(resblocks)
+ConvTranspose1d(256, 128, kernel_size=16, stride=8, padding=4)
+sum(resblocks)
+ConvTranspose1d(128, 64, kernel_size=4, stride=2, padding=1)
+sum(resblocks)
+ConvTranspose1d(64, 32, kernel_size=4, stride=2, padding=1)
 """
 class WaveGenerator(torch.nn.Module):
     def __init__(
-        self, initial_channel, resblock, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, 
+        self, initial_channel, resblock_kernel_sizes, resblock_dilation_sizes, upsample_rates, 
         upsample_initial_channel, upsample_kernel_sizes, embed_dim=192
     ):
         super(WaveGenerator, self).__init__()
         self.num_kernels = len(resblock_kernel_sizes)
         self.num_upsamples = len(upsample_rates)
         self.conv_pre = Conv1d(initial_channel, upsample_initial_channel, 7, 1, padding=3)
-        resblock = modules.ResBlock1 #  if resblock == '1' else modules.ResBlock2
 
         self.ups = nn.ModuleList()
+        self.MRFs = nn.ModuleList()
         for i, (u, k) in enumerate(zip(upsample_rates, upsample_kernel_sizes)):
+            in_ch = upsample_initial_channel//(2**i)
+            out_ch = in_ch//2
             self.ups.append(weight_norm(
-                ConvTranspose1d(
-                    upsample_initial_channel//(2**i),
-                    upsample_initial_channel//(2**(i+1)),
-                    kernel_size=k, stride=u, padding=(k-u)//2)
-                )
-            )
+                ConvTranspose1d(in_ch, out_ch, kernel_size=k, stride=u, padding=(k-u)//2)
+            ))
+            self.MRFs.append(modules.MultiReceptiveField(out_ch, resblock_kernel_sizes, resblock_dilation_sizes))
         self.ups.apply(init_weights)
-
-        self.resblocks = nn.ModuleList()
-        for i in range(len(self.ups)):
-            ch = upsample_initial_channel//(2**(i+1))
-            for j, (k, d) in enumerate(zip(resblock_kernel_sizes, resblock_dilation_sizes)):
-                self.resblocks.append(resblock(channels=ch, kernel_size=k, dilation=d))
 
         self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=False)
         self.cond = nn.Sequential(
@@ -247,10 +253,7 @@ class WaveGenerator(torch.nn.Module):
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, modules.LRELU_SLOPE)
             x = self.ups[i](x)
-            xs = self.resblocks[i*self.num_kernels](x)
-            for j in range(1, self.num_kernels):  # Multi Receptive Field, apply summation
-                xs += self.resblocks[i*self.num_kernels+j](x)
-            x = xs / self.num_kernels # Average output of resblocks and assign to x
+            x = self.MRFs[i](x)
         x = F.leaky_relu(x)
         x = self.conv_post(x)  # 输出1通道语音信号
         x = torch.tanh(x)      # tanh 激活后输出有正负
@@ -366,44 +369,147 @@ class MultiPeriodDiscriminator(torch.nn.Module):
 
         return y_d_rs, y_d_gs, fmap_rs, fmap_gs
 
+from text import symbols
+
+class VITS_Model(nn.Module):
+    def __init__(
+        self, 
+        n_vocab=len(symbols),
+        spec_channels=513,
+        inter_channels=192,
+        hidden_channels=192,
+        filter_channels=768,
+        n_heads=2,
+        n_layers=6,
+        kernel_size=3,
+        p_dropout=0.1,
+        resblock_kernel_sizes=[3, 7, 11],
+        resblock_dilation_sizes=[[1,3,5], [1,3,5], [1,3,5]],
+        upsample_initial_channel=512,
+        upsample_rates=[8, 8, 2, 2],
+        upsample_kernel_sizes=[16, 16, 4, 4],
+        embed_dim=192,
+        use_sdp=False,
+        **kwargs
+    ):
+        super().__init__()
+        self.enc_p = TextEncoder(
+            n_vocab, inter_channels, hidden_channels, filter_channels,
+            n_heads, n_layers, kernel_size, p_dropout)
+
+        self.dec = WaveGenerator(
+            initial_channel=inter_channels,  
+            resblock_kernel_sizes=resblock_kernel_sizes, 
+            resblock_dilation_sizes=resblock_dilation_sizes,
+            upsample_rates=upsample_rates, 
+            upsample_initial_channel=upsample_initial_channel, 
+            upsample_kernel_sizes=upsample_kernel_sizes, 
+            embed_dim=embed_dim)
+
+        self.enc_q = WaveEncoder(
+            in_channels=spec_channels, 
+            out_channels=inter_channels, 
+            hidden_channels=hidden_channels,
+            kernel_size=5,
+            dilation_rate=1, 
+            n_layers=16, 
+            embed_dim=embed_dim)
+
+        self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, embed_dim=embed_dim)
+
+        if use_sdp:
+            self.dp = StochasticDurationPredictor(in_channels=hidden_channels, filter_channels=192, 
+                kernel_size=3, p_dropout=0.5, n_flows=4, embed_dim=embed_dim)
+        else:
+            self.dp = DurationPredictor(hidden_channels, 256, 3, 0.5, embed_dim=embed_dim)
+
+    def forward(self, x, x_lengths, y, y_lengths, embed):
+        pass
+
+    @torch.no_grad()
+    def infer(self, x, x_lengths, embed, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
+        x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
+
+        # predict alignments
+        logw = self.dp(x, x_mask, embed=embed, training=False, noise_scale=noise_scale_w)
+        w = torch.exp(logw) * x_mask * length_scale
+        w_ceil = torch.ceil(w)
+
+        # 沿着维度1,2求和，剩下第0维度(batch), clamp(w, 1)使得w最小值为1
+        y_lengths = torch.clamp_min(torch.sum(w_ceil, [1, 2]), 1).long()
+        
+        y_mask = torch.unsqueeze(commons.sequence_mask(y_lengths, None), 1).to(x_mask.dtype)
+        attn_mask = torch.unsqueeze(x_mask, 2) * torch.unsqueeze(y_mask, -1)
+        attn = commons.generate_path(w_ceil, attn_mask)
+
+        m_p = torch.matmul(attn.squeeze(1), m_p.transpose(1, 2)).transpose(1, 2)  # [b, t', t], [b, t, d] -> [b, d, t']
+        logs_p = torch.matmul(attn.squeeze(1), logs_p.transpose(1, 2)).transpose(1, 2)  # [b, t', t], [b, t, d] -> [b, d, t']
+
+        z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale  # VAE sampling
+        z = self.flow(z_p, y_mask, embed=embed, reverse=True)
+        o = self.dec((z * y_mask)[:, :, :max_len], embed=embed)
+        return o, attn, y_mask, (z, z_p, m_p, logs_p)
+
+    def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
+        g_src = self.emb_g(sid_src).unsqueeze(-1)
+        g_tgt = self.emb_g(sid_tgt).unsqueeze(-1)
+        z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, embed=g_src)
+        z_p = self.flow(z, y_mask, embed=g_src)
+        z_hat = self.flow(z_p, y_mask, embed=g_tgt, reverse=True)
+        o_hat = self.dec(z_hat * y_mask, embed=g_tgt)
+        return o_hat, y_mask, (z, z_p, z_hat)
 
 class SynthesizerTrn(nn.Module):
     """
     合成器，可以用于训练和推理
+    改配置文件不如改代码方便, 于是设置init参数默认值
     """
-    def __init__(self, n_vocab,
-                 spec_channels,
-                 segment_size,
-                 inter_channels,
-                 hidden_channels,
-                 filter_channels,
-                 n_heads,
-                 n_layers,
-                 kernel_size,
-                 p_dropout,
-                 resblock,
-                 resblock_kernel_sizes,
-                 resblock_dilation_sizes,
-                 upsample_rates,
-                 upsample_initial_channel,
-                 upsample_kernel_sizes,
-                 n_speakers=1,
-                 embed_dim=192,
-                 use_sdp=True,
-                 **kwargs):
+    def __init__(
+        self, 
+        n_vocab=len(symbols),
+        spec_channels=513,
+        segment_size=32,
+        inter_channels=192,
+        hidden_channels=192,
+        filter_channels=768,
+        n_heads=2,
+        n_layers=6,
+        kernel_size=3,
+        p_dropout=0.1,
+        resblock_kernel_sizes=[3, 7, 11],
+        resblock_dilation_sizes=[[1,3,5], [1,3,5], [1,3,5]],
+        upsample_initial_channel=512,
+        upsample_rates=[8, 8, 2, 2],
+        upsample_kernel_sizes=[16, 16, 4, 4],
+        embed_dim=192,
+        use_sdp=False,
+        **kwargs):
 
         super().__init__()
-        self.segment_size = segment_size
-        self.n_speakers = n_speakers
+        self.segment_size = segment_size  # 训练专用
         self.use_sdp = use_sdp
 
-        self.enc_p = TextEncoder(n_vocab, inter_channels, hidden_channels, filter_channels,
+        self.enc_p = TextEncoder(
+            n_vocab, inter_channels, hidden_channels, filter_channels,
             n_heads, n_layers, kernel_size, p_dropout)
 
-        self.dec = WaveGenerator(inter_channels, resblock, resblock_kernel_sizes, resblock_dilation_sizes,
-            upsample_rates, upsample_initial_channel, upsample_kernel_sizes, embed_dim=embed_dim)
+        self.dec = WaveGenerator(
+            initial_channel=inter_channels,  
+            resblock_kernel_sizes=resblock_kernel_sizes, 
+            resblock_dilation_sizes=resblock_dilation_sizes,
+            upsample_rates=upsample_rates, 
+            upsample_initial_channel=upsample_initial_channel, 
+            upsample_kernel_sizes=upsample_kernel_sizes, 
+            embed_dim=embed_dim)
 
-        self.enc_q = PosteriorEncoder(spec_channels, inter_channels, hidden_channels, 5, 1, 16, embed_dim=embed_dim)
+        self.enc_q = WaveEncoder(
+            in_channels=spec_channels, 
+            out_channels=inter_channels, 
+            hidden_channels=hidden_channels,
+            kernel_size=5,
+            dilation_rate=1, 
+            dilation_rate=16, 
+            embed_dim=embed_dim)
 
         self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, embed_dim=embed_dim)
 
@@ -443,7 +549,7 @@ class SynthesizerTrn(nn.Module):
         else:
             logw_ = torch.log(w + 1e-6) * x_mask
             logw = self.dp(x, x_mask, embed=embed)
-            # 损失值留了一个batch维度，为什么？
+            # torch.sum(..., [1,2])使得损失值l_length保留了一个batch维度，为什么？
             l_length = torch.sum((logw-logw_)**2, [1, 2]) / torch.sum(x_mask)
 
         # expand prior
@@ -455,16 +561,17 @@ class SynthesizerTrn(nn.Module):
         o = self.dec(z_slice, embed=embed)
         return o, l_length, attn, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
 
+    @torch.no_grad()
     def infer(self, x, x_lengths, embed, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
         x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
 
         # speaker embedding
-        if embed is None:
-            embed = torch.randn(x.shape[0], self.embed_dim)
+        # if embed is None:
+        # embed = torch.randn(x.shape[0], self.embed_dim)
         # g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
 
         # predict alignments
-        logw = self.dp(x, x_mask, embed=embed, reverse=True, noise_scale=noise_scale_w) if self.use_sdp else self.dp(x, x_mask, embed=embed)
+        logw = self.dp(x, x_mask, embed=embed, reverse=True, noise_scale=noise_scale_w)
         w = torch.exp(logw) * x_mask * length_scale
         w_ceil = torch.ceil(w)
 
@@ -484,7 +591,6 @@ class SynthesizerTrn(nn.Module):
         return o, attn, y_mask, (z, z_p, m_p, logs_p)
 
     def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
-        assert self.n_speakers > 0, "n_speakers have to be larger than 0."
         g_src = self.emb_g(sid_src).unsqueeze(-1)
         g_tgt = self.emb_g(sid_tgt).unsqueeze(-1)
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, embed=g_src)
