@@ -411,7 +411,7 @@ class VITS_Model(nn.Module):
             out_channels=inter_channels, 
             hidden_channels=hidden_channels,
             kernel_size=5,
-            dilation_rate=1, 
+            dilation_rate=1,
             n_layers=16, 
             embed_dim=embed_dim)
 
