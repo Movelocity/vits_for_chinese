@@ -110,6 +110,8 @@ class WN(torch.nn.Module):
         self.in_layers = torch.nn.ModuleList()
         self.res_skip_layers = torch.nn.ModuleList()
         self.drop = nn.Dropout(p_dropout)
+        self.hidden_channels = hidden_channels
+        self.n_layers = n_layers
 
         # cond_layer = nn.Conv1d(embed_dim, 2*hidden_channels*n_layers, 1)
         self.cond_block = nn.Sequential(
