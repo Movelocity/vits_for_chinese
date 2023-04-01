@@ -238,7 +238,7 @@ class Trainer:
         # 写入tensorboard日志
         utils.summarize(
             writer=self.writer, 
-            global_step=self.epoch, 
+            global_step=epoch, 
             images=self.image_dict, 
             scalars=self.scalar_dict
         )
