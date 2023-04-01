@@ -240,7 +240,7 @@ class MultiReceptiveField(torch.nn.Module):
         for k, d in zip(resblock_kernel_sizes, resblock_dilation_sizes):
             self.resblocks.append(ResBlock1(channels=in_channels, kernel_size=k, dilation=d))
 
-    def forwawrd(self, x):
+    def forward(self, x):
         xs = self.resblocks[0](x)
         for j in range(1, self.num_fields):  # Multi Receptive Field, apply summation
             xs += self.resblocks[j](x)

@@ -190,7 +190,7 @@ class WaveEncoder(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels,
         kernel_size, dilation_rate, n_layers, embed_dim=192
     ):
-        super().__init__()
+        super(WaveEncoder, self).__init__()
         self.out_channels = out_channels
         self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
         self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers, embed_dim=embed_dim)
