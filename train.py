@@ -231,6 +231,7 @@ class Trainer:
 
     def log(self, epoch):
         if epoch % self.log_interval != 0: return
+        print(self.scalar_dict)
         if not self.use_tensorboard: return
         # 将训练记录写入tensorboard
         # 若服务器无法开启查看端口，训练完后可将记录下载到本地查看
