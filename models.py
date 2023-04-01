@@ -240,7 +240,7 @@ class WaveGenerator(torch.nn.Module):
             self.MRFs.append(modules.MultiReceptiveField(out_ch, resblock_kernel_sizes, resblock_dilation_sizes))
         self.ups.apply(init_weights)
 
-        self.conv_post = Conv1d(ch, 1, 7, 1, padding=3, bias=False)
+        self.conv_post = Conv1d(out_ch, 1, 7, 1, padding=3, bias=False)
         self.cond = nn.Sequential(
             nn.Linear(embed_dim, 256),
             nn.Sigmoid(),
