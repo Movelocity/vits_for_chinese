@@ -103,7 +103,7 @@ class DurationPredictor(nn.Module):
         self.proj = nn.Conv1d(filter_channels, 1, 1)
         self.cond = nn.Linear(embed_dim, in_channels)
 
-    def forward(self, x, x_mask, w, embed, training=False, noise_scale=1):
+    def forward(self, x, x_mask, w=None, embed=None, training=False, noise_scale=1):
         # w, noise scale 参数仅作为占位，实际上不使用
         x = torch.detach(x)
         x += self.cond(torch.detach(embed)).unsqueeze(-1)
