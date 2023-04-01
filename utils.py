@@ -169,20 +169,20 @@ def install_basic():
 install_basic()
 
 import torch
-def load_model(model, saved_state_dict):
-    state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
-    new_state_dict= {}
-    for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
-        try:
-            new_state_dict[k] = saved_state_dict[k]
-        except:
-            logger.info(f"{k} 预训练权重和当前配置不匹配，使用默认权重.")
-            new_state_dict[k] = v
+# def load_model(model, saved_state_dict):
+    # state_dict = model.module.state_dict() if hasattr(model, 'module') else model.state_dict()
+    # new_state_dict= {}
+    # for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
+    #     try:
+    #         new_state_dict[k] = saved_state_dict[k]
+    #     except:
+    #         logger.info(f"{k} 预训练权重和当前配置不匹配，使用默认权重.")
+    #         new_state_dict[k] = v
 
-    if hasattr(model, 'module'):
-        model.module.load_state_dict(new_state_dict)
-    else:
-        model.load_state_dict(new_state_dict)
+    # if hasattr(model, 'module'):
+    #     model.module.load_state_dict(new_state_dict)
+    # else:
+    #     model.load_state_dict(new_state_dict)
 
 # TODO: 下载共享的预训练权重
 def from_pretrained(model, link):
@@ -225,16 +225,17 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, init_lr):
     if len(folders) == 0:
         return init_lr, 1
         # 暂时停用预训练下载，等我整理一下上传 w/o speaker_emb 的模型
-        from_pretrained(net_g, '')
-        from_pretrained(net_d, '')  # 不同结构的模型目前无法兼容，暂时不使用预训练
-        return init_lr, 1
+        # from_pretrained(net_g, '')
+        # from_pretrained(net_d, '')  # 不同结构的模型目前无法兼容，暂时不使用预训练
+        # return init_lr, 1
     else:
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
 
-    load_model(net_g, f'{ckpt_folder}/generator.ckpt')
-    load_model(net_d, f'{ckpt_folder}/discriminator.ckpt')
-
+    # load_model(net_g, f'{ckpt_folder}/generator.ckpt')
+    # load_model(net_d, f'{ckpt_folder}/discriminator.ckpt')
+    net_g.load_state_dict(torch.load(f'{ckpt_folder}/generator.ckpt'))
+    net_d.load_state_dict(torch.load(f'{ckpt_folder}/discriminator.ckpt'))
     try:
         optim_g.load_state_dict(torch.load(f'{ckpt_folder}/optim_g'))
         optim_d.load_state_dict(torch.load(f'{ckpt_folder}/optim_d'))
