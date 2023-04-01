@@ -242,7 +242,7 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, init_lr):
     except ValueError:
         print('优化器加载失败，使用随机初始化...')
 
-    info = torch.load(f'{ckpt_folder}info.pt')
+    info = torch.load(f'{ckpt_folder}/info.pt')
     learning_rate, epoch = info['learning_rate'], info['epoch']
     logger.info(f"Loaded checkpoint '{ckpt_folder}' (epoch {epoch})")
     return learning_rate, epoch
