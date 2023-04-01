@@ -135,17 +135,21 @@ class Trainer:
                     self.train_config.learning_rate, epoch, "logs/model")
 
     def train_epoch(self, epoch):
+        
         for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in self.train_loader:
             x, x_lengths = x.cuda(non_blocking=True), x_lengths.cuda(non_blocking=True)
             spec, spec_lengths = spec.cuda(non_blocking=True), spec_lengths.cuda(non_blocking=True)
             y, y_lengths = y.cuda(non_blocking=True), y_lengths.cuda(non_blocking=True)
             speaker_embs = speaker_embs.cuda(non_blocking=True)
-            
+
+            net_g.train()
+            net_d.train()
+
             # Train the Discriminator
             with autocast(enabled=self.fp16_run):
                  # x: 文本编码；y: 语音频谱
                 x, m_p, logs_p, x_mask = self.model.enc_p(x, x_lengths)
-                z, m_q, logs_q, y_mask = self.model.enc_q(y, y_lengths, embed=speaker_embs)
+                z, m_q, logs_q, y_mask = self.model.enc_q(spec, spec_lengths, embed=speaker_embs)
                 z_p = self.model.flow(z, y_mask, embed=speaker_embs)  # 具体形状有待调试
 
                 attn = calc_attn(x_mask, y_mask, m_p, logs_p, z_p)
@@ -160,9 +164,10 @@ class Trainer:
                 logs_p = torch.matmul(attn.squeeze(1), logs_p.transpose(1, 2)).transpose(1, 2)
 
                 # 批次里每条语音只取一个片段用于计算loss，这里指定片段的偏移量，便于从ground truth里截取同样的片段
-                z_slice, ids_slice = commons.rand_slice_segments(z, y_lengths, self.segment_size)
+                z_slice, ids_slice = commons.rand_slice_segments(z, spec_lengths, self.segment_size)
                 y_hat = self.model.dec(z_slice, embed=speaker_embs)
 
+                # 这里曾经是原仓库的分界线
                 y = commons.slice_segments(y, ids_slice * self.data_config.hop_length, self.train_config.segment_size)
                 # Discriminator
                 y_d_hat_r, y_d_hat_g, _, _ = self.net_d(y, y_hat.detach())  # 训练D的阶段，detech可防止梯度传到G
