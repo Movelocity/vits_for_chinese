@@ -70,7 +70,7 @@ class Trainer:
         self.eval_interval = self.train_config.eval_interval
         self.segment_size = self.train_config.segment_size // self.data_config.hop_length
         self.fp16_run = self.train_config.fp16_run
-
+        self.use_tensorboard = use_tensorboard
         if use_tensorboard:
             self.logger = utils.get_logger("logs/")
             # logger.info(hps)
