@@ -142,8 +142,8 @@ class Trainer:
             y, y_lengths = y.cuda(non_blocking=True), y_lengths.cuda(non_blocking=True)
             speaker_embs = speaker_embs.cuda(non_blocking=True)
 
-            net_g.train()
-            net_d.train()
+            self.model.train()
+            self.net_d.train()
 
             # Train the Discriminator
             with autocast(enabled=self.fp16_run):
