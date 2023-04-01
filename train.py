@@ -101,7 +101,7 @@ class Trainer:
         self.net_d = MultiPeriodDiscriminator(self.model_config.use_spectral_norm).cuda()
 
         self.optim_g = torch.optim.AdamW(
-            self.net_g.parameters(),
+            self.model.parameters(),
             self.train_config.learning_rate,
             betas=self.train_config.betas,
             eps= self.train_config.eps)
@@ -131,7 +131,7 @@ class Trainer:
                 self.log(epoch)
             if self.epoch % self.eval_interval == 1:
                 self.evaluate(epoch)
-                utils.save_checkpoint(net_g, optim_g, net_d, optim_d, 
+                utils.save_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, 
                     self.hps.train.learning_rate, epoch, "logs/model")
 
     def train_epoch(self, epoch):
@@ -194,7 +194,7 @@ class Trainer:
             self.optim_g.zero_grad()
             self.scaler.scale(loss_gen_all).backward()
             self.scaler.unscale_(optim_g)
-            grad_norm_g = commons.clip_grad_value_(net_g.parameters(), clip_value=None)  # 裁剪值None，仅计算和记录, 不产生其它效应
+            grad_norm_g = commons.clip_grad_value_(self.model.parameters(), clip_value=None)  # 裁剪值None，仅计算和记录, 不产生其它效应
             self.scaler.step(optim_g)
             self.scaler.update()
 
