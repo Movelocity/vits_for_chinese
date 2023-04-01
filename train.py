@@ -191,7 +191,7 @@ class Trainer:
                 with autocast(enabled=False):  # 可不可以取消这个？
                     loss_dur = torch.sum(l_length.float())  # panelty on the total time of the result
                     loss_mel = F.l1_loss(y_mel, y_hat_mel) * self.train_config.c_mel  # 梅尔频谱图之间计算损失
-                    loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * self.train_config.c_kl  # 文本编码对齐语音VAE的中间值
+                    loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, y_mask) * self.train_config.c_kl  # 文本编码对齐语音VAE的中间值
 
                     loss_fm = feature_loss(fmap_r, fmap_g)  # 真假数据在判别器模块内的feature map应尽量靠近
                     loss_gen, losses_gen = generator_loss(y_d_hat_g)  # 每个值尽量靠近1
