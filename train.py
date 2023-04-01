@@ -111,12 +111,12 @@ class Trainer:
             betas=self.train_config.betas,
             eps=self.train_config.eps)
 
-        self.lr, self.epoch_start = utils.load_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, hps)
+        self.lr, self.epoch_start = utils.load_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d)
 
         self.scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-            optim_g, gamma=hps.train.lr_decay, last_epoch=epoch_start-2)
+            self.optim_g, gamma=self.train_config.lr_decay, last_epoch=epoch_start-2)
         self.scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-            optim_d, gamma=hps.train.lr_decay, last_epoch=epoch_start-2)
+            self.optim_d, gamma=self.train_config.lr_decay, last_epoch=epoch_start-2)
 
         self.scaler = GradScaler(enabled=self.fp16_run)
         self.scalar_dict = None
@@ -130,9 +130,9 @@ class Trainer:
             if epoch % self.log_interval == 0:
                 self.log(epoch)
             if self.epoch % self.eval_interval == 1:
-                self.evaluate(epoch)
+                self.evaluate(size=5, epoch=epoch)
                 utils.save_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, 
-                    self.hps.train.learning_rate, epoch, "logs/model")
+                    self.train_config.learning_rate, epoch, "logs/model")
 
     def train_epoch(self, epoch):
         for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in train_loader:
@@ -171,21 +171,21 @@ class Trainer:
 
             self.optim_d.zero_grad()
             self.scaler.scale(loss_disc_all).backward()
-            self.scaler.unscale_(optim_d)
+            self.scaler.unscale_(self.optim_d)
             grad_norm_d = commons.clip_grad_value_(self.net_d.parameters(), clip_value=None) # 裁剪值None，仅计算和记录, 不产生其它效应
-            self.scaler.step(optim_d)
+            self.scaler.step(self.optim_d)
 
             # Train the Generator
             with autocast(enabled=self.fp16_run):
                 y_d_hat_r, y_d_hat_g, fmap_r, fmap_g = self.net_d(y, y_hat)
 
-                mel = spec_to_mel_torch(spec, config=hps.data)  # 由频谱获得梅尔频谱，用于计算损失
+                mel = spec_to_mel_torch(spec, config=self.data_config)  # 由频谱获得梅尔频谱，用于计算损失
                 y_mel = commons.slice_segments(mel, ids_slice, self.segment_size)
-                y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1), config=hps.data)
+                y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1), config=self.data_config)
                 with autocast(enabled=False):  # 可不可以取消这个？
                     loss_dur = torch.sum(l_length.float())  # panelty on the total time of the result
-                    loss_mel = F.l1_loss(y_mel, y_hat_mel) * hps.train.c_mel  # 梅尔频谱图之间计算损失
-                    loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * hps.train.c_kl  # 文本编码对齐语音VAE的中间值
+                    loss_mel = F.l1_loss(y_mel, y_hat_mel) * self.train_config.c_mel  # 梅尔频谱图之间计算损失
+                    loss_kl = kl_loss(z_p, logs_q, m_p, logs_p, z_mask) * self.train_config.c_kl  # 文本编码对齐语音VAE的中间值
 
                     loss_fm = feature_loss(fmap_r, fmap_g)  # 真假数据在判别器模块内的feature map应尽量靠近
                     loss_gen, losses_gen = generator_loss(y_d_hat_g)  # 每个值尽量靠近1
@@ -193,9 +193,9 @@ class Trainer:
 
             self.optim_g.zero_grad()
             self.scaler.scale(loss_gen_all).backward()
-            self.scaler.unscale_(optim_g)
+            self.scaler.unscale_(self.optim_g)
             grad_norm_g = commons.clip_grad_value_(self.model.parameters(), clip_value=None)  # 裁剪值None，仅计算和记录, 不产生其它效应
-            self.scaler.step(optim_g)
+            self.scaler.step(self.optim_g)
             self.scaler.update()
 
         self.scheduler_g.step()
@@ -237,7 +237,7 @@ class Trainer:
         )
         
     @torch.no_grad()
-    def evaluate(self, size=4):
+    def evaluate(self, size=4, epoch=1):
         self.model.eval()
         eval_data = [self.train_dataset[idx] for idx in np.random.randint(0, len(self.train_dataset), size=size)]
         # (token_ids, spec, audio, embed)
@@ -250,16 +250,16 @@ class Trainer:
             embed = embed.unsqueeze(0).cuda()
             y_hat = self.model.infer(input_ids, input_lengths, embed=embed)[0]
 
-            y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1).float(), config=self.hps.data)
+            y_hat_mel = mel_spectrogram_torch(y_hat.squeeze(1).float(), config=self.data_config)
             audio_dict.update({str(i): y_hat[0, :, :]})
             image_dict.update({f"gen/mel/{i}": utils.plot_spectrogram_to_numpy(y_hat_mel[0].cpu().numpy())})
 
         utils.summarize(
-            writer=writer_eval,
+            writer=self.writer_eval,
             global_step=epoch,
             images=image_dict,
             audios=audio_dict,
-            audio_sampling_rate=self.hps.data.sampling_rate
+            audio_sampling_rate=self.data_config.sampling_rate
         )
         self.model.train()
 
