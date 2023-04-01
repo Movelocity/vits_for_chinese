@@ -111,7 +111,7 @@ class Trainer:
             betas=self.train_config.betas,
             eps=self.train_config.eps)
 
-        self.lr, self.epoch_start = utils.load_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d)
+        self.lr, self.epoch_start = utils.load_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, init_lr=self.train_config.learning_rate)
 
         self.scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
             self.optim_g, gamma=self.train_config.lr_decay, last_epoch=epoch_start-2)
