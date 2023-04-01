@@ -259,7 +259,7 @@ total 991M
 -rw-r--r-- 1 root root 304M Feb 25 01:11 optim_g
 """
 
-def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_dir='logs/model'):
+def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch):
     """
     保存训练状态, 默认保留最新的两个epoch文件夹, 旧的直接删去
     
@@ -267,7 +267,7 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, model_
     
     感觉模型过拟合的时候，可以手动删掉过拟合的文件夹，然后重新启动训练
     """
-    checkpoint_folder = f'{model_dir}/epoch_{epoch}'
+    checkpoint_folder = f'logs/model/epoch_{epoch}'
 
     logger.info("Saving ckpt to {}".format(checkpoint_folder))
 

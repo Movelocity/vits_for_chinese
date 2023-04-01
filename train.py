@@ -231,11 +231,15 @@ class Trainer:
 
     def log(self, epoch):
         if epoch % self.log_interval != 0: return
-        print(self.scalar_dict)
-        if not self.use_tensorboard: return
+        
         # 将训练记录写入tensorboard
         # 若服务器无法开启查看端口，训练完后可将记录下载到本地查看
         # 写入tensorboard日志
+        if not self.use_tensorboard:
+            for k, v in self.scalar_dict.items():
+                print(f'{k}: {v.item()}', end=', ')
+                print('')
+            return
         utils.summarize(
             writer=self.writer, 
             global_step=epoch, 
@@ -245,6 +249,7 @@ class Trainer:
         
     @torch.no_grad()
     def evaluate(self, size=4, epoch=1):
+        if not self.use_tensorboard: return
         self.model.eval()
         eval_data = [self.train_dataset[idx] for idx in np.random.randint(0, len(self.train_dataset), size=size)]
         # (token_ids, spec, audio, embed)
