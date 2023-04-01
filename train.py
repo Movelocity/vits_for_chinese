@@ -251,7 +251,6 @@ class Trainer:
         audio_dict = {}
         image_dict = {}
         for i, (token_ids, spec, audio, embed) in enumerate(eval_data):
-            phonemes = data[-1]
             input_ids = token_ids.unsqueeze(0).cuda()
             input_lengths = torch.LongTensor([input_ids.size(1)]).cuda()
             embed = embed.unsqueeze(0).cuda()
