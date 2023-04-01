@@ -152,10 +152,10 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         audio, sr = torchaudio.load(audiopath)
         if sr != self.sampling_rate:
             raise ValueError("{} {} SR doesn't match target {} SR".format(sr, self.sr))
-        emebed_file = audio_file.replace("dataset/wave_data/", 'dataset/embed/').replace('.wav', '.emb.pt')
-        spec_file = audio_file.replace("dataset/wave_data/", 'dataset/spec/').replace('.wav', '.spec.pt')
+        embed_file = audiopath.replace("dataset/wave_data/", 'dataset/embed/').replace('.wav', '.emb.pt')
+        spec_file = audiopath.replace("dataset/wave_data/", 'dataset/spec/').replace('.wav', '.spec.pt')
         spec =  torch.load(spec_file)
-        embed =  torch.load(emebed_file)
+        embed =  torch.load(embed_file)
         return (token_ids, spec, audio, embed)
 
     def __getitem__(self, index):
