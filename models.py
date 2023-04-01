@@ -248,7 +248,7 @@ class WaveGenerator(torch.nn.Module):
         )
 
     def forward(self, x, embed):
-        x =  self.conv_pre(x) + self.cond(emebd).unsqueeze(-1)  # 让 Linear 的输出类似于 Conv1d
+        x =  self.conv_pre(x) + self.cond(embd).unsqueeze(-1)  # 让 Linear 的输出类似于 Conv1d
         for i in range(self.num_upsamples):
             x = F.leaky_relu(x, modules.LRELU_SLOPE)
             x = self.ups[i](x)
