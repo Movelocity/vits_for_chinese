@@ -81,7 +81,7 @@ class Trainer:
 
         self.train_dataset = TextAudioSpeakerLoader(hparams=self.data_config)
         train_sampler = DistributedBucketSampler(
-            train_dataset,
+            self.train_dataset,
             self.train_config.batch_size,
             [32, 300, 400, 500, 600, 700, 800, 900, 1000],
             num_replicas=1,
