@@ -123,7 +123,7 @@ class Trainer:
 
     def train(self, epochs=1000):
         for epoch in range(self.epoch_start, epochs+1):
-            print('====> Epoch: {}'.format(self.epoch))
+            print('====> Epoch: {}'.format(epoch))
             self.train_loader.batch_sampler.set_epoch(epoch)
             self.train_epoch(epoch)
             
