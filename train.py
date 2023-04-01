@@ -133,7 +133,7 @@ class Trainer:
             if epoch % self.eval_interval == 1:
                 self.evaluate(size=5, epoch=epoch)
                 utils.save_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, 
-                    self.train_config.learning_rate, epoch, "logs/model")
+                    self.train_config.learning_rate, epoch)
 
     def train_epoch(self, epoch):
         
