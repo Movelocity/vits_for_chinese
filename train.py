@@ -135,7 +135,7 @@ class Trainer:
                     self.train_config.learning_rate, epoch, "logs/model")
 
     def train_epoch(self, epoch):
-        for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in train_loader:
+        for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in self.train_loader:
             x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(rank, non_blocking=True)
             spec, spec_lengths = spec.cuda(rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
             y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(rank, non_blocking=True)
