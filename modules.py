@@ -232,6 +232,7 @@ class MultiReceptiveField(torch.nn.Module):
     独立成一个模块, 方便以后替换掉
     """
     def __init__(self, in_channels, resblock_kernel_sizes, resblock_dilation_sizes):
+        super(MultiReceptiveField, self).__init__()
         self.resblocks = nn.ModuleList()
         self.num_fields = len(resblock_kernel_sizes)
         for k, d in zip(resblock_kernel_sizes, resblock_dilation_sizes):
