@@ -53,8 +53,7 @@ def prepare_data(hparams, redo=False):
         resampler = T.Resample(sr, new_freq=16000, dtype=audio.dtype).to(device)
 
     options = whisper.DecodingOptions(language="zh", without_timestamps=True)
-    text_file = open('dataset/text.txt', 'a', encoding='utf-8')
-    phoneme_file = open('dataset/phonemes.txt', 'a', encoding='utf-8')
+
     total_job = len(audio_files)
     for i, audio_file in enumerate(audio_files):
         emebed_file = audio_file.replace("dataset/wave_data/", 'dataset/embed/').replace('.wav', '.emb.pt')
@@ -84,12 +83,14 @@ def prepare_data(hparams, redo=False):
             mel = whisper.log_mel_spectrogram(audio_16k)
             result = model.decode(mel, options).text
             phonemes = text.pypinyin_g2p(result)
-            text_file.write(audio_file + '|' + result + '\n')
-            phoneme_file.write(audio_file + '|' + phonemes + '\n')  # 保存临时结果
-
+            with open('dataset/text.txt', 'a', encoding='utf-8') as text_file:
+                # 给人看的
+                text_file.write(audio_file + '|' + result + '\n')
+            with open('dataset/phonemes.txt', 'a', encoding='utf-8') as phoneme_file:
+                # 给机器看的
+                phoneme_file.write(audio_file + '|' + phonemes + '\n')  # 保存临时结果
         print(f'\r{i/total_job}%', end='')
-    text_file.close()
-    phoneme_file.close()
+    print("\r100%")
     print('数据集语音识别结果已保存在 dataset/text.txt')
 
 def load_filenames_and_text(textfile, split="|"):
