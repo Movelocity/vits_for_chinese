@@ -136,10 +136,10 @@ class Trainer:
 
     def train_epoch(self, epoch):
         for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in self.train_loader:
-            x, x_lengths = x.cuda(rank, non_blocking=True), x_lengths.cuda(rank, non_blocking=True)
-            spec, spec_lengths = spec.cuda(rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
-            y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(rank, non_blocking=True)
-            speaker_embs = speaker_embs.cuda(rank, non_blocking=True)
+            x, x_lengths = x.cuda(non_blocking=True), x_lengths.cuda(non_blocking=True)
+            spec, spec_lengths = spec.cuda(non_blocking=True), spec_lengths.cuda(non_blocking=True)
+            y, y_lengths = y.cuda(non_blocking=True), y_lengths.cuda(non_blocking=True)
+            speaker_embs = speaker_embs.cuda(non_blocking=True)
             
             # Train the Discriminator
             with autocast(enabled=self.fp16_run):
