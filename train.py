@@ -114,9 +114,9 @@ class Trainer:
         self.lr, self.epoch_start = utils.load_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, init_lr=self.train_config.learning_rate)
 
         self.scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
-            self.optim_g, gamma=self.train_config.lr_decay, last_epoch=epoch_start-2)
+            self.optim_g, gamma=self.train_config.lr_decay, last_epoch=self.epoch_start-2)
         self.scheduler_d = torch.optim.lr_scheduler.ExponentialLR(
-            self.optim_d, gamma=self.train_config.lr_decay, last_epoch=epoch_start-2)
+            self.optim_d, gamma=self.train_config.lr_decay, last_epoch=self.epoch_start-2)
 
         self.scaler = GradScaler(enabled=self.fp16_run)
         self.scalar_dict = None
