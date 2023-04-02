@@ -139,7 +139,7 @@ class Trainer:
 
     def train_epoch(self, epoch):
         progress = 0
-        epoch_progress = len(self.train_loader) // self.train_config.batch_size
+        epoch_progress = len(self.train_loader)
         for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in self.train_loader:
             x, x_lengths = x.cuda(non_blocking=True), x_lengths.cuda(non_blocking=True)
             spec, spec_lengths = spec.cuda(non_blocking=True), spec_lengths.cuda(non_blocking=True)
@@ -208,7 +208,7 @@ class Trainer:
             self.scaler.update()
 
             progress += 1
-            print(f'\r{progress/epoch_progress*100:.3f}%', end='')
+            print(f'\r{progress*100//epoch_progress}%', end='')
         print('\r100%')
 
         self.scheduler_g.step()
