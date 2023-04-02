@@ -294,11 +294,12 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, latest
     torch.save({'learning_rate': learning_rate, 'epoch': epoch},  f'{checkpoint_folder}/info.pt')
 
     # 删除旧的检查点
-    folders = glob.glob(f'{model_dir}/epoch_*')
-    folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
-    if len(folders) > 2:
-        shutil.rmtree(folders[0])    #递归删除文件夹
-        logger.info(f'remove old ckpts: {folders[0]}')
+    if not latest_only:
+        folders = glob.glob(f'logs/model/epoch_*')
+        folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
+        if len(folders) > 2:
+            shutil.rmtree(folders[0])    #递归删除文件夹
+            logger.info(f'remove old ckpts: {folders[0]}')
 
 
 def summarize(writer, global_step, scalars={}, histograms={}, images={}, audios={}, audio_sampling_rate=22050):
