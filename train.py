@@ -207,10 +207,6 @@ class Trainer:
             self.scaler.step(self.optim_g)
             self.scaler.update()
 
-            progress += 1
-            print(f'\r{progress*100//epoch_progress}%', end='')
-        print('\r100%')
-
         self.scheduler_g.step()
         self.scheduler_d.step()
 
