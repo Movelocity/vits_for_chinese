@@ -112,7 +112,9 @@ class Trainer:
             betas=self.train_config.betas,
             eps=self.train_config.eps)
 
-        self.lr, self.epoch_start = utils.load_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, init_lr=self.train_config.learning_rate)
+        self.lr, self.epoch_start = utils.load_checkpoint(
+            self.model, self.optim_g, self.net_d, self.optim_d, 
+            init_lr=self.train_config.learning_rate, latest_only=self.train_config.latest_only)
 
         self.scheduler_g = torch.optim.lr_scheduler.ExponentialLR(
             self.optim_g, gamma=self.train_config.lr_decay, last_epoch=self.epoch_start-2)
@@ -124,7 +126,7 @@ class Trainer:
 
     def train(self, epochs=1000):
         for epoch in range(self.epoch_start, epochs+1):
-            print('====> Epoch: {}'.format(epoch))
+            print('====> Epoch: {}: '.format(epoch))
             self.train_loader.batch_sampler.set_epoch(epoch)
             self.train_epoch(epoch)
             
@@ -133,10 +135,11 @@ class Trainer:
             if epoch % self.eval_interval == 1:
                 self.evaluate(size=5, epoch=epoch)
                 utils.save_checkpoint(self.model, self.optim_g, self.net_d, self.optim_d, 
-                    self.train_config.learning_rate, epoch)
+                    self.train_config.learning_rate, epoch, self.train_config.latest_only)
 
     def train_epoch(self, epoch):
-        
+        progress = 0
+        epoch_progress = len(self.train_loader) // self.train_config.batch_size
         for (x, x_lengths, spec, spec_lengths, y, y_lengths, speaker_embs) in self.train_loader:
             x, x_lengths = x.cuda(non_blocking=True), x_lengths.cuda(non_blocking=True)
             spec, spec_lengths = spec.cuda(non_blocking=True), spec_lengths.cuda(non_blocking=True)
@@ -204,6 +207,10 @@ class Trainer:
             self.scaler.step(self.optim_g)
             self.scaler.update()
 
+            progress += 1
+            print(f'\r{progress/epoch_progress*100:.3f}%', end='')
+        print('\r100%')
+
         self.scheduler_g.step()
         self.scheduler_d.step()
 
@@ -229,6 +236,7 @@ class Trainer:
             "complete/alignment": utils.plot_alignment_to_numpy(attn[0, 0].data.cpu().numpy())
         }
 
+        
     def log(self, epoch):
         if epoch % self.log_interval != 0: return
         

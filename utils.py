@@ -220,7 +220,7 @@ def from_pretrained(model, link):
         new_state_dict[k] = v
     model.load_state_dict(new_state_dict, strict=False)
 
-def load_checkpoint(net_g, optim_g, net_d, optim_d, init_lr):
+def load_checkpoint(net_g, optim_g, net_d, optim_d, init_lr, latest_only=True):
     folders = glob.glob('logs/model/epoch_*')
     if len(folders) == 0:
         return init_lr, 1
@@ -228,6 +228,8 @@ def load_checkpoint(net_g, optim_g, net_d, optim_d, init_lr):
         # from_pretrained(net_g, '')
         # from_pretrained(net_d, '')  # 不同结构的模型目前无法兼容，暂时不使用预训练
         # return init_lr, 1
+    elif latest_only:
+        ckpt_folder = "logs/model/epoch_latest"
     else:
         folders.sort(key=lambda f: int("".join(filter(str.isdigit, f))))
         ckpt_folder = folders[-1]
@@ -259,7 +261,7 @@ total 991M
 -rw-r--r-- 1 root root 304M Feb 25 01:11 optim_g
 """
 
-def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch):
+def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch, latest_only=True):
     """
     保存训练状态, 默认保留最新的两个epoch文件夹, 旧的直接删去
     
@@ -267,7 +269,10 @@ def save_checkpoint(net_g, optim_g, net_d, optim_d, learning_rate, epoch):
     
     感觉模型过拟合的时候，可以手动删掉过拟合的文件夹，然后重新启动训练
     """
-    checkpoint_folder = f'logs/model/epoch_{epoch}'
+    if latest_only:
+        checkpoint_folder = 'logs/model/epoch_latest'
+    else:
+        checkpoint_folder = f'logs/model/epoch_{epoch}'
 
     logger.info("Saving ckpt to {}".format(checkpoint_folder))
 
