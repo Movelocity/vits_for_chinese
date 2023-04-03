@@ -185,40 +185,40 @@ import torch
     #     model.load_state_dict(new_state_dict)
 
 # TODO: 下载共享的预训练权重
-def from_pretrained(model, link):
-    name = link.split('/')[-1]
-    try:
-        run(f'wget -nc -O ./{name} {link}',
-                desc='正在加载预训练权重', errdesc='预训练权重未加载')
-    except RuntimeError:
-        return
-    # 考虑使用基于Transformer的预训练Tokenizer，但是可能覆盖不了每个词的读音，暂时搁置
+# def from_pretrained(model, link):
+#     name = link.split('/')[-1]
+#     try:
+#         run(f'wget -nc -O ./{name} {link}',
+#                 desc='正在加载预训练权重', errdesc='预训练权重未加载')
+#     except RuntimeError:
+#         return
+#     # 考虑使用基于Transformer的预训练Tokenizer，但是可能覆盖不了每个词的读音，暂时搁置
 
-    ld_ckpt = torch.load(f'./{name}', map_location='cpu')
-    if isinstance(ld_ckpt, dict) and 'model' in ld_ckpt.keys():
-        saved_state_dict = ld_ckpt['model']
-    else:
-        saved_state_dict = ld_ckpt
+#     ld_ckpt = torch.load(f'./{name}', map_location='cpu')
+#     if isinstance(ld_ckpt, dict) and 'model' in ld_ckpt.keys():
+#         saved_state_dict = ld_ckpt['model']
+#     else:
+#         saved_state_dict = ld_ckpt
 
-    state_dict = model.state_dict()
-    init_vocab_emb = False
+#     state_dict = model.state_dict()
+#     init_vocab_emb = False
 
-    try:
-        if model.state_dict()['enc_p.emb.weight'].shape != saved_state_dict['enc_p.emb.weight'].shape:
-            init_vocab_emb = True
-    except:
-        pass
+#     try:
+#         if model.state_dict()['enc_p.emb.weight'].shape != saved_state_dict['enc_p.emb.weight'].shape:
+#             init_vocab_emb = True
+#     except:
+#         pass
 
-    new_state_dict= {}
-    for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
-        # if k=='enc_p.emb.weight' and init_vocab_emb:
-        #     import text
-        #     new_state_dict[k] = torch.randn(len(text.symbols), hps.model.hidden_channels)
-        #     torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.hidden_channels**-0.5)
-        #     print('Randomly init vocab embeddings.')
-        # else: 
-        new_state_dict[k] = v
-    model.load_state_dict(new_state_dict, strict=False)
+#     new_state_dict= {}
+#     for k, v in state_dict.items():  # 如果配置文件比原来的模型增加了模块，就提醒一下
+#         # if k=='enc_p.emb.weight' and init_vocab_emb:
+#         #     import text
+#         #     new_state_dict[k] = torch.randn(len(text.symbols), hps.model.hidden_channels)
+#         #     torch.nn.init.normal_(new_state_dict[k], 0.0, hps.model.hidden_channels**-0.5)
+#         #     print('Randomly init vocab embeddings.')
+#         # else: 
+#         new_state_dict[k] = v
+#     model.load_state_dict(new_state_dict, strict=False)
 
 def load_checkpoint(net_g, optim_g, net_d, optim_d, init_lr, latest_only=True):
     folders = glob.glob('logs/model/epoch_*')
