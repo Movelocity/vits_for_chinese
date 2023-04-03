@@ -130,7 +130,7 @@ def clean_text(text, pad_token='_'):
             in_brackets = False
             result.extend(text[si+1:i].split())
         elif in_brackets == False:
-            if char in _letters_map: # 字母
+            if char.upper() in _letters_map: # 字母
                 result.append(_letters_map[char.upper()])
             elif char in _punct_map: # 标点
                 result.append(_punct_map[char])
