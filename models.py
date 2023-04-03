@@ -46,8 +46,8 @@ class StochasticDurationPredictor(nn.Module):
 
     def forward(self, x, x_mask, w=None, embed=None, training=False, noise_scale=1.0):
         x = self.pre(torch.detach(x))
-        x += self.cond(torch.detach(embed)).unsqueeze(-1)
-        x = self.convs(x, x_mask)
+        emb = self.cond(torch.detach(embed)).unsqueeze(-1)
+        x = self.convs(x, x_mask, embed=emb)
         x = self.proj(x) * x_mask
 
         if training:
@@ -55,7 +55,7 @@ class StochasticDurationPredictor(nn.Module):
             assert w is not None
 
             h_w = self.post_pre(w)
-            h_w = self.post_convs(h_w, x_mask)
+            h_w = self.post_convs(h_w, x_mask, embed=emb)
             h_w = self.post_proj(h_w) * x_mask
             e_q = torch.randn(w.size(0), 2, w.size(2)).to(device=x.device, dtype=x.dtype) * x_mask
             z_q = e_q

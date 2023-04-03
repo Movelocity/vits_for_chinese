@@ -80,8 +80,8 @@ class DDSConv(nn.Module):
             self.norms_1.append(LayerNorm(channels))
             self.norms_2.append(LayerNorm(channels))
 
-    def forward(self, x, x_mask, g):
-        x = x + g
+    def forward(self, x, x_mask, embed):
+        x = x + embed
         for i in range(self.n_layers):
             y = self.convs_sep[i](x * x_mask)
             y = self.norms_1[i](y)
