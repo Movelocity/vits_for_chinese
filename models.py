@@ -75,7 +75,7 @@ class StochasticDurationPredictor(nn.Module):
             logdet_tot += logdet
             z = torch.cat([z0, z1], 1)
             for flow in flows:
-                z, logdet = flow(z, x_mask, embed=x, reverse=reverse)
+                z, logdet = flow(z, x_mask, embed=x, reverse=False)
                 logdet_tot = logdet_tot + logdet
             nll = torch.sum(0.5 * (math.log(2*math.pi) + (z**2))* x_mask, [1, 2]) - logdet_tot
             return nll + logq  # [b] 训练时直接返回Loss(batched)
@@ -84,7 +84,7 @@ class StochasticDurationPredictor(nn.Module):
             flows = flows[:-2] + [flows[-1]]  # remove a useless vflow
             z = torch.randn(x.size(0), 2, x.size(2)).to(device=x.device, dtype=x.dtype) * noise_scale
             for flow in flows:
-                z = flow(z, x_mask, embed=x, reverse=reverse)
+                z = flow(z, x_mask, embed=x, reverse=True)
             z0, z1 = torch.split(z, [1, 1], 1)
             logw = z0
             return logw  # 预测时返回时长预测值
