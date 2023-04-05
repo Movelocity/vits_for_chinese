@@ -6,6 +6,27 @@ from torch.nn import functional as F
 import commons
 from modules import LayerNorm
 
+class PositionalEncoding(nn.Module):
+    """
+    Written by GPT4
+    forward() input: 
+      x: [batch, seq_len, hidden]
+    """
+    def __init__(self, d_model, max_len=512):
+        super(PositionalEncoding, self).__init__()
+        # Compute the positional encodings once in log space.
+        position = torch.arange(max_len).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() *(math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, d_model)
+        pe.require_grad = False
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x):
+        x = x + self.pe[:, :x.size(1)]
+        return x
 
 class Encoder(nn.Module):
     """

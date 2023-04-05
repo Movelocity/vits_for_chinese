@@ -1,7 +1,7 @@
 from pypinyin import pinyin, Style
 import re
 
-_pad = list("_")
+_pad = list("_")  # 第 0 个 token 为 padding, 方便 nn.Embedding 模块使用
 
 _punctuation = list("!'(),.:;?-")
 
@@ -27,7 +27,7 @@ _phonetic_symbols = [
     'uo','uai','uei','ua','ue','uan','uen','uang','ueng'
 ]
 _additional_pho_symbols = [
-    "n1", "n2", "n3", "n4", "m1", "m2", "m3", "m4"
+    "n1", "n2", "n3", "n4", "m1", "m2", "m3", "m4", "♫", "~", "^"
 ]
 _tones = ["", "1", "2", "3", "4"]  # 声调
 

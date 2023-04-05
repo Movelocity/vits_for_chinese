@@ -80,8 +80,7 @@ class DDSConv(nn.Module):
             self.norms_1.append(LayerNorm(channels))
             self.norms_2.append(LayerNorm(channels))
 
-    def forward(self, x, x_mask, embed):
-        x = x + embed
+    def forward(self, x, x_mask):
         for i in range(self.n_layers):
             y = self.convs_sep[i](x * x_mask)
             y = self.norms_1[i](y)
@@ -101,7 +100,7 @@ class WN(torch.nn.Module):
         kernel_size, 
         dilation_rate, 
         n_layers, 
-        embed_dim=192, 
+        embed_dim=None, 
         p_dropout=0
     ):
         super(WN, self).__init__()
@@ -112,15 +111,16 @@ class WN(torch.nn.Module):
         self.drop = nn.Dropout(p_dropout)
         self.hidden_channels = hidden_channels
         self.n_layers = n_layers
-
-        # cond_layer = nn.Conv1d(embed_dim, 2*hidden_channels*n_layers, 1)
-        self.cond_block = nn.Sequential(
-            nn.Linear(embed_dim, hidden_channels),
-            nn.Sigmoid(),
-            nn.Linear(hidden_channels, 2*hidden_channels*n_layers),
-            nn.Tanh()
-        )
-        # self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
+        
+        if embed_dim is not None:
+            self.cond_block = nn.Sequential(
+                nn.Linear(embed_dim, hidden_channels),
+                nn.Sigmoid(),
+                nn.Linear(hidden_channels, 2*hidden_channels*n_layers),
+                nn.Tanh()
+            )
+        else:
+            self.cond_block = None
 
         for i in range(n_layers):
             dilation = dilation_rate ** i
@@ -136,17 +136,19 @@ class WN(torch.nn.Module):
             res_skip_layer = torch.nn.utils.weight_norm(res_skip_layer, name='weight')
             self.res_skip_layers.append(res_skip_layer)
 
-    def forward(self, x, x_mask, embed, **kwargs):
+    def forward(self, x, x_mask, embed=None, **kwargs):
         output = torch.zeros_like(x)
         n_channels_tensor = torch.IntTensor([self.hidden_channels])
 
-        embed = self.cond_block(embed).unsqueeze(-1)
+        embed = self.cond_block(embed).unsqueeze(-1) if embed is not None else None
         for i in range(self.n_layers):
             x_in = self.in_layers[i](x)
 
             cond_offset = i * 2 * self.hidden_channels
-            g_l = embed[:, cond_offset:cond_offset+2*self.hidden_channels, :]
-            # g_l = torch.zeros_like(x_in)  # 如果没有embedding输入就用随机embedding
+            if embed is None:
+                g_l = torch.zeros_like(x_in)  # 如果没有embedding输入就用随机embedding
+            else:
+                g_l = embed[:, cond_offset:cond_offset+2*self.hidden_channels, :]
 
             acts = commons.fused_add_tanh_sigmoid_multiply(x_in, g_l, n_channels_tensor)
             acts = self.drop(acts)
@@ -246,32 +248,6 @@ class MultiReceptiveField(torch.nn.Module):
             xs += self.resblocks[j](x)
         return xs / self.num_fields
 
-# class ResBlock2(torch.nn.Module):
-#     def __init__(self, channels, kernel_size=3, dilation=(1, 3)):
-#         super(ResBlock2, self).__init__()
-#         self.convs = nn.ModuleList([
-#             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[0],
-#                                padding=get_padding(kernel_size, dilation[0]))),
-#             weight_norm(Conv1d(channels, channels, kernel_size, 1, dilation=dilation[1],
-#                                padding=get_padding(kernel_size, dilation[1])))
-#         ])
-#         self.convs.apply(init_weights)
-
-#     def forward(self, x, x_mask=None):
-#         for c in self.convs:
-#             xt = F.leaky_relu(x, LRELU_SLOPE)
-#             if x_mask is not None:
-#                 xt = xt * x_mask
-#             xt = c(xt)
-#             x = xt + x
-#         if x_mask is not None:
-#             x = x * x_mask
-#         return x
-
-#     def remove_weight_norm(self):
-#         for l in self.convs:
-#             remove_weight_norm(l)
-
 
 class Log(nn.Module):
     def forward(self, x, x_mask, reverse=False, **kwargs):
@@ -368,8 +344,7 @@ class ConvFlow(nn.Module):
         self.half_channels = in_channels // 2
 
         self.pre = nn.Conv1d(self.half_channels, filter_channels, 1)
-        self.convs = DDSConv(filter_channels, kernel_size,
-                             n_layers, p_dropout=0.)
+        self.convs = DDSConv(filter_channels, kernel_size, n_layers, p_dropout=0.)
         self.proj = nn.Conv1d(filter_channels, self.half_channels * (num_bins * 3 - 1), 1)
         self.proj.weight.data.zero_()
         self.proj.bias.data.zero_()
@@ -381,8 +356,8 @@ class ConvFlow(nn.Module):
         h = self.proj(h) * x_mask
 
         b, c, t = x0.shape
-        # [b, cx?, t] -> [b, c, t, ?]
-        h = h.reshape(b, c, -1, t).permute(0, 1, 3, 2)
+        
+        h = h.reshape(b, c, -1, t).permute(0, 1, 3, 2)  # [b, cx?, t] -> [b, c, t, ?]
 
         unnormalized_widths = h[..., :self.num_bins] / math.sqrt(self.filter_channels)
         unnormalized_heights = h[..., self.num_bins:2 *self.num_bins] / math.sqrt(self.filter_channels)

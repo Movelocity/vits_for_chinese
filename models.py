@@ -42,12 +42,15 @@ class StochasticDurationPredictor(nn.Module):
         self.pre = nn.Conv1d(in_channels, filter_channels, 1)
         self.proj = nn.Conv1d(filter_channels, filter_channels, 1)
         self.convs = modules.DDSConv(filter_channels, kernel_size, n_layers=3, p_dropout=p_dropout)
-        self.cond = nn.Linear(embed_dim, filter_channels)
+        self.cond = nn.Sequential(
+            nn.Linear(embed_dim, filter_channels), 
+            nn.Sigmoid()
+        )
 
     def forward(self, x, x_mask, w=None, embed=None, training=False, noise_scale=1.0):
-        x = self.pre(torch.detach(x))
-        emb = self.cond(torch.detach(embed)).unsqueeze(-1)
-        x = self.convs(x, x_mask, embed=emb)
+        x = self.pre(x.detach())
+        emb = self.cond(embed.detach()).unsqueeze(-1)
+        x = self.convs(x+emb, x_mask)
         x = self.proj(x) * x_mask
 
         if training:
@@ -75,7 +78,7 @@ class StochasticDurationPredictor(nn.Module):
             logdet_tot += logdet
             z = torch.cat([z0, z1], 1)
             for flow in flows:
-                z, logdet = flow(z, x_mask, embed=x, reverse=False)
+                z, logdet = flow(z, x_mask, embed=embed, reverse=False)
                 logdet_tot = logdet_tot + logdet
             nll = torch.sum(0.5 * (math.log(2*math.pi) + (z**2))* x_mask, [1, 2]) - logdet_tot
             return nll + logq  # [b] 训练时直接返回Loss(batched)
@@ -84,51 +87,14 @@ class StochasticDurationPredictor(nn.Module):
             flows = flows[:-2] + [flows[-1]]  # remove a useless vflow
             z = torch.randn(x.size(0), 2, x.size(2)).to(device=x.device, dtype=x.dtype) * noise_scale
             for flow in flows:
-                z = flow(z, x_mask, embed=x, reverse=True)
+                z = flow(z, x_mask, embed=embed, reverse=True)
             z0, z1 = torch.split(z, [1, 1], 1)
             logw = z0
             return logw  # 预测时返回时长预测值
 
-
-class DurationPredictor(nn.Module):
-    # 和StochasticDurationPredictor二选一
-    # 论文里随机时长预测比这个确定时长预测MOS高0.04
-    def __init__(self, in_channels, filter_channels, kernel_size, p_dropout, embed_dim):
-        super().__init__()
-        self.drop = nn.Dropout(p_dropout)
-        self.conv_1 = nn.Conv1d(in_channels, filter_channels, kernel_size, padding=kernel_size//2)
-        self.norm_1 = modules.LayerNorm(filter_channels)
-        self.conv_2 = nn.Conv1d(filter_channels, filter_channels, kernel_size, padding=kernel_size//2)
-        self.norm_2 = modules.LayerNorm(filter_channels)
-        self.proj = nn.Conv1d(filter_channels, 1, 1)
-        self.cond = nn.Linear(embed_dim, in_channels)
-
-    def forward(self, x, x_mask, w=None, embed=None, training=False, noise_scale=1):
-        # w, noise scale 参数仅作为占位，实际上不使用
-        x = torch.detach(x)
-        x += self.cond(torch.detach(embed)).unsqueeze(-1)
-        x = self.conv_1(x * x_mask)
-        x = torch.relu(x)
-        x = self.norm_1(x)
-        x = self.drop(x)
-        x = self.conv_2(x * x_mask)
-        x = torch.relu(x)
-        x = self.norm_2(x)
-        x = self.drop(x)
-        x = self.proj(x * x_mask)
-        logw_pred = x * x_mask
-        if training:  
-            logw_calc = torch.log(w + 1e-6) * x_mask
-            # torch.sum(..., [1,2])使得损失值l_length保留了一个batch维度
-            return torch.sum((logw_pred-logw_calc)**2, [1, 2]) # 训练时直接返回Loss(batched)
-        else:  
-            return logw_pred  # 预测时返回时长预测值
-
-
 class TextEncoder(nn.Module):
     """
-    文本侧的编码器
-    forward() 返回的最后一个是 mask, 因为处理的是 sequential data, 长短不一, 短的需要加mask。
+    Transformer Text Encoder for VAE
     """
     def __init__(self, n_vocab, out_channels, hidden_channels, filter_channels,
         n_heads, n_layers, kernel_size, p_dropout
@@ -136,19 +102,22 @@ class TextEncoder(nn.Module):
         super().__init__()
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
-
+        
+        self.pos_enc = attentions.PositionalEncoding(hidden_channels)
         self.emb = nn.Embedding(n_vocab, hidden_channels)
         nn.init.normal_(self.emb.weight, 0.0, hidden_channels**-0.5)
-
-        self.encoder = attentions.Encoder(hidden_channels, filter_channels, n_heads,
-            n_layers, kernel_size, p_dropout)
-        # 输出通道 out_channels*2, 拆分出一半均值和一半方差对数
+        
+        # Transformer Encoder with convolutional FFN
+        self.encoder = attentions.Encoder(hidden_channels, filter_channels, n_heads, n_layers, kernel_size, p_dropout)
+        # out_channels*2, half for means and half for log of variance in VAE
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
         
     def forward(self, x, x_lengths):
-        x = self.emb(x) * math.sqrt(self.hidden_channels)  # [b, t, h]
-        x = torch.transpose(x, 1, -1)  # [b, h, t]
-        x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
+        # Is positional encoding neccessary?
+        x = self.emb(x) # [b, t, h]
+        x = self.pos_enc(x) # Add positional encoding
+        x = x.transpose(1, 2) # [b, h, t]
+        x_mask = commons.sequence_mask(x_lengths, x.size(2)).unsqueeze(1) # [b, 1, t] torch.bool
         x = self.encoder(x * x_mask, x_mask)
         stats = self.proj(x) * x_mask
         m, logs = torch.split(stats, self.out_channels, dim=1)
@@ -193,13 +162,14 @@ class WaveEncoder(nn.Module):
         super(WaveEncoder, self).__init__()
         self.out_channels = out_channels
         self.pre = nn.Conv1d(in_channels, hidden_channels, 1)
-        self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers, embed_dim=embed_dim)
+        self.enc = modules.WN(hidden_channels, kernel_size, dilation_rate, n_layers)#, embed_dim=embed_dim)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
-    def forward(self, x, x_lengths, embed):
-        x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, max_length=x.size(2)), 1).to(x.dtype)
+    def forward(self, x, x_lengths):
+        x_mask = commons.sequence_mask(x_lengths, max_length=x.size(2)).unsqueeze(1)
         x = self.pre(x) * x_mask
-        x = self.enc(x, x_mask, embed=embed)
+        # x = self.enc(x, x_mask, embed=embed)
+        x = self.enc(x, x_mask)  # 暂时取消 speaker embedding, 仅在合成器 WaveGenerator 中使用 speaker embedding
         stats = self.proj(x) * x_mask
         m, logs = torch.split(stats, self.out_channels, dim=1)
         z = (m + torch.randn_like(logs)*torch.exp(logs)) * x_mask  # VAE reparametrization
@@ -348,9 +318,7 @@ class MultiPeriodDiscriminator(torch.nn.Module):
         periods = [2, 3, 5, 7, 11]
 
         discs = [DiscriminatorS(use_spectral_norm=use_spectral_norm)]
-        discs = discs + \
-            [DiscriminatorP(i, use_spectral_norm=use_spectral_norm)
-             for i in periods]
+        discs = discs + [DiscriminatorP(i, use_spectral_norm=use_spectral_norm) for i in periods]
         self.discriminators = nn.ModuleList(discs)
 
     def forward(self, y, y_hat):
@@ -411,8 +379,8 @@ class VITS_Model(nn.Module):
             hidden_channels=hidden_channels,
             kernel_size=5,
             dilation_rate=1,
-            n_layers=16, 
-            embed_dim=embed_dim)
+            n_layers=16)
+            # embed_dim=embed_dim)
 
         self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, embed_dim=embed_dim)
 
@@ -457,143 +425,3 @@ class VITS_Model(nn.Module):
         z_hat = self.flow(z_p, y_mask, embed=g_tgt, reverse=True)
         o_hat = self.dec(z_hat * y_mask, embed=g_tgt)
         return o_hat, y_mask, (z, z_p, z_hat)
-
-# class SynthesizerTrn(nn.Module):
-#     """
-#     合成器，可以用于训练和推理
-#     改配置文件不如改代码方便, 于是设置init参数默认值
-#     """
-#     def __init__(
-#         self, 
-#         n_vocab=len(symbols),
-#         spec_channels=513,
-#         segment_size=32,
-#         inter_channels=192,
-#         hidden_channels=192,
-#         filter_channels=768,
-#         n_heads=2,
-#         n_layers=6,
-#         kernel_size=3,
-#         p_dropout=0.1,
-#         resblock_kernel_sizes=[3, 7, 11],
-#         resblock_dilation_sizes=[[1,3,5], [1,3,5], [1,3,5]],
-#         upsample_initial_channel=512,
-#         upsample_rates=[8, 8, 2, 2],
-#         upsample_kernel_sizes=[16, 16, 4, 4],
-#         embed_dim=192,
-#         use_sdp=False,
-#         **kwargs):
-
-#         super().__init__()
-#         self.segment_size = segment_size  # 训练专用
-#         self.use_sdp = use_sdp
-
-#         self.enc_p = TextEncoder(
-#             n_vocab, inter_channels, hidden_channels, filter_channels,
-#             n_heads, n_layers, kernel_size, p_dropout)
-
-#         self.dec = WaveGenerator(
-#             initial_channel=inter_channels,  
-#             resblock_kernel_sizes=resblock_kernel_sizes, 
-#             resblock_dilation_sizes=resblock_dilation_sizes,
-#             upsample_rates=upsample_rates, 
-#             upsample_initial_channel=upsample_initial_channel, 
-#             upsample_kernel_sizes=upsample_kernel_sizes, 
-#             embed_dim=embed_dim)
-
-#         self.enc_q = WaveEncoder(
-#             in_channels=spec_channels, 
-#             out_channels=inter_channels, 
-#             hidden_channels=hidden_channels,
-#             kernel_size=5,
-#             dilation_rate=1, 
-#             dilation_rate=16, 
-#             embed_dim=embed_dim)
-
-#         self.flow = ResidualCouplingBlock(inter_channels, hidden_channels, 5, 1, 4, embed_dim=embed_dim)
-
-#         if use_sdp:
-#             self.dp = StochasticDurationPredictor(in_channels=hidden_channels, filter_channels=192, 
-#                 kernel_size=3, p_dropout=0.5, n_flows=4, embed_dim=embed_dim)
-#         else:
-#             self.dp = DurationPredictor(hidden_channels, 256, 3, 0.5, embed_dim=embed_dim)
-
-#     def forward(self, x, x_lengths, y, y_lengths, embed):
-#         # x: 文本编码；y: 语音频谱
-#         x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
-#         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, embed=embed)
-#         z_p = self.flow(z, y_mask, embed=embed)  # 具体形状有待调试
-
-#         with torch.no_grad():
-#             # negative cross-entropy between speech prior (s_p) and word prior (z_p)
-#             # -sum(x * log(y) + (1 - x) * log(1 - y))
-#             # [b, d, t] meaning sp times squre root of e
-#             s_p_sq_r = torch.exp(-2 * logs_p)  # (e^ln(s_p))^(-2) = 1 / s_p^2
-#             neg_cent1 = torch.sum(-0.5*math.log(2*math.pi) -logs_p, [1], keepdim=True)  # [b, 1, t_s]
-#             # [b, t_t, d] x [b, d, t_s] = [b, t_t, t_s]
-#             neg_cent2 = torch.matmul(-0.5*(z_p**2).transpose(1, 2), s_p_sq_r)
-#             # [b, t_t, d] x [b, d, t_s] = [b, t_t, t_s]
-#             neg_cent3 = torch.matmul(z_p.transpose(1, 2), (m_p * s_p_sq_r))
-#             neg_cent4 = torch.sum(-0.5*(m_p**2) * s_p_sq_r,[1], keepdim=True)  # [b, 1, t_s]
-#             neg_cent = neg_cent1 + neg_cent2 + neg_cent3 + neg_cent4
-
-#             attn_mask = torch.unsqueeze(x_mask, 2) * torch.unsqueeze(y_mask, -1)
-#             attn = monotonic_align.maximum_path(neg_cent, attn_mask.squeeze(1)).unsqueeze(1).detach()
-
-#         w = attn.sum(2)
-#         # calculate duration loss
-#         if self.use_sdp:
-#             l_length = self.dp(x, x_mask, w, embed=embed)
-#             l_length = l_length / torch.sum(x_mask)
-#         else:
-#             logw_ = torch.log(w + 1e-6) * x_mask
-#             logw = self.dp(x, x_mask, embed=embed)
-#             # torch.sum(..., [1,2])使得损失值l_length保留了一个batch维度，为什么？
-#             l_length = torch.sum((logw-logw_)**2, [1, 2]) / torch.sum(x_mask)
-
-#         # expand prior
-#         m_p = torch.matmul(attn.squeeze(1), m_p.transpose(1, 2)).transpose(1, 2)
-#         logs_p = torch.matmul(attn.squeeze(1), logs_p.transpose(1, 2)).transpose(1, 2)
-
-#         z_slice, ids_slice = commons.rand_slice_segments(z, y_lengths, self.segment_size)
-#         # 批次里每条语音只取一个片段用于计算loss，这里指定片段的偏移量，便于从ground truth里截取同样的片段
-#         o = self.dec(z_slice, embed=embed)
-#         return o, l_length, attn, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q)
-
-#     @torch.no_grad()
-#     def infer(self, x, x_lengths, embed, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
-#         x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
-
-#         # speaker embedding
-#         # if embed is None:
-#         # embed = torch.randn(x.shape[0], self.embed_dim)
-#         # g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
-
-#         # predict alignments
-#         logw = self.dp(x, x_mask, embed=embed, reverse=True, noise_scale=noise_scale_w)
-#         w = torch.exp(logw) * x_mask * length_scale
-#         w_ceil = torch.ceil(w)
-
-#         # 沿着维度1,2求和，剩下第0维度(batch), clamp(w, 1)使得w最小值为1
-#         y_lengths = torch.clamp_min(torch.sum(w_ceil, [1, 2]), 1).long()
-        
-#         y_mask = torch.unsqueeze(commons.sequence_mask(y_lengths, None), 1).to(x_mask.dtype)
-#         attn_mask = torch.unsqueeze(x_mask, 2) * torch.unsqueeze(y_mask, -1)
-#         attn = commons.generate_path(w_ceil, attn_mask)
-
-#         m_p = torch.matmul(attn.squeeze(1), m_p.transpose(1, 2)).transpose(1, 2)  # [b, t', t], [b, t, d] -> [b, d, t']
-#         logs_p = torch.matmul(attn.squeeze(1), logs_p.transpose(1, 2)).transpose(1, 2)  # [b, t', t], [b, t, d] -> [b, d, t']
-
-#         z_p = m_p + torch.randn_like(m_p) * torch.exp(logs_p) * noise_scale  # VAE sampling
-#         z = self.flow(z_p, y_mask, embed=embed, reverse=True)
-#         o = self.dec((z * y_mask)[:, :, :max_len], embed=embed)
-#         return o, attn, y_mask, (z, z_p, m_p, logs_p)
-
-#     def voice_conversion(self, y, y_lengths, sid_src, sid_tgt):
-#         g_src = self.emb_g(sid_src).unsqueeze(-1)
-#         g_tgt = self.emb_g(sid_tgt).unsqueeze(-1)
-#         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, embed=g_src)
-#         z_p = self.flow(z, y_mask, embed=g_src)
-#         z_hat = self.flow(z_p, y_mask, embed=g_tgt, reverse=True)
-#         o_hat = self.dec(z_hat * y_mask, embed=g_tgt)
-#         return o_hat, y_mask, (z, z_p, z_hat)
