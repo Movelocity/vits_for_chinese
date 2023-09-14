@@ -107,8 +107,9 @@ class DDSConv(nn.Module):
       x = x + y
     return x * x_mask
 
-
-class WN(torch.nn.Module):
+# Wavenet: https://arxiv.org/abs/1609.03499
+# Dilated 卷积的设计很符合语音格式的数据，可以捕捉语音信号的周期特征
+class WN(nn.Module):
   def __init__(self, hidden_channels, kernel_size, dilation_rate, n_layers, gin_channels=0, p_dropout=0):
     super(WN, self).__init__()
     assert(kernel_size % 2 == 1)
@@ -119,20 +120,20 @@ class WN(torch.nn.Module):
     self.gin_channels = gin_channels
     self.p_dropout = p_dropout
 
-    self.in_layers = torch.nn.ModuleList()
-    self.res_skip_layers = torch.nn.ModuleList()
+    self.in_layers = nn.ModuleList()
+    self.res_skip_layers = nn.ModuleList()
     self.drop = nn.Dropout(p_dropout)
 
     if gin_channels != 0:
-      cond_layer = torch.nn.Conv1d(gin_channels, 2*hidden_channels*n_layers, 1)
-      self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
+      cond_layer = nn.Conv1d(gin_channels, 2*hidden_channels*n_layers, 1)
+      self.cond_layer = nn.utils.weight_norm(cond_layer, name='weight')
 
     for i in range(n_layers):
       dilation = dilation_rate ** i
       padding = int((kernel_size * dilation - dilation) / 2)
-      in_layer = torch.nn.Conv1d(hidden_channels, 2*hidden_channels, kernel_size,
+      in_layer = nn.Conv1d(hidden_channels, 2*hidden_channels, kernel_size,
                                  dilation=dilation, padding=padding)
-      in_layer = torch.nn.utils.weight_norm(in_layer, name='weight')
+      in_layer = nn.utils.weight_norm(in_layer, name='weight')
       self.in_layers.append(in_layer)
 
       # last one is not necessary
@@ -141,8 +142,8 @@ class WN(torch.nn.Module):
       else:
         res_skip_channels = hidden_channels
 
-      res_skip_layer = torch.nn.Conv1d(hidden_channels, res_skip_channels, 1)
-      res_skip_layer = torch.nn.utils.weight_norm(res_skip_layer, name='weight')
+      res_skip_layer = nn.Conv1d(hidden_channels, res_skip_channels, 1)
+      res_skip_layer = nn.utils.weight_norm(res_skip_layer, name='weight')
       self.res_skip_layers.append(res_skip_layer)
 
   def forward(self, x, x_mask, g=None, **kwargs):
@@ -177,14 +178,14 @@ class WN(torch.nn.Module):
 
   def remove_weight_norm(self):
     if self.gin_channels != 0:
-      torch.nn.utils.remove_weight_norm(self.cond_layer)
+      nn.utils.remove_weight_norm(self.cond_layer)
     for l in self.in_layers:
-      torch.nn.utils.remove_weight_norm(l)
+      nn.utils.remove_weight_norm(l)
     for l in self.res_skip_layers:
-     torch.nn.utils.remove_weight_norm(l)
+     nn.utils.remove_weight_norm(l)
 
 
-class ResBlock1(torch.nn.Module):
+class ResBlock1(nn.Module):
     def __init__(self, channels, kernel_size=3, dilation=(1, 3, 5)):
         super(ResBlock1, self).__init__()
         self.convs1 = nn.ModuleList([
@@ -229,7 +230,7 @@ class ResBlock1(torch.nn.Module):
             remove_weight_norm(l)
 
 
-class ResBlock2(torch.nn.Module):
+class ResBlock2(nn.Module):
     def __init__(self, channels, kernel_size=3, dilation=(1, 3)):
         super(ResBlock2, self).__init__()
         self.convs = nn.ModuleList([

@@ -36,6 +36,8 @@ import text
 
 torch.backends.cudnn.benchmark = True
 
+utils.prepare_training_dependency()
+
 def train(hps):
     logger = utils.get_logger(hps.model_dir)
     logger.info(hps)

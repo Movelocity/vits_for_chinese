@@ -1,8 +1,9 @@
 import numpy as np
 import torch
-from .monotonic_align.core import maximum_path_c
+from ctypes import cdll
+maximum_path_c = cdll.LoadLibrary('./monotonic_align/core.dll')
 
-# check out: https://github.com/jaywalnut310/glow-tts/blob/master/commons.py
+
 def maximum_path(neg_cent, mask):
   """ Cython optimized version.
   neg_cent: [b, t_t, t_s]

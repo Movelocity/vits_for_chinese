@@ -77,9 +77,6 @@ def frp_for_online_tensorboard(server_ip, server_port, local_port, remote_port):
     不保证 tensorboard 能用, 出了bug请重装tensorflow
     参考kaggle笔记本: https://www.kaggle.com/code/hollway/train-vits
     """
-    if not is_installed("tensorboard"): 
-        run_pip(f'install protobuf==3.19.0')
-        run_pip(f"install tensorboard==2.3.0", "tensorboard")
 
     import platform
     if platform.system() == "Linux" and not os.path.exists('./frp_0.37.0_linux_amd64.tar.gz'):
@@ -119,35 +116,48 @@ custom_domains = {0}
     run(f'tensorboard --logdir ./logs --host 0.0.0.0 --port {local_port} > ./frp37/output_tb.txt 2>&1 &')
     print(f'已启动TensorBoard, 训练产生记录后后再打开{tb_link}')
 
-def prepare_env():
+def prepare_common_dependency():
     if not is_installed("torch"):
+        print("检测到 pytorch 未安装, 自动安装1.13.1版本")
         torch_command = 'pip3 install torch==1.13.1+cu116 -f https://download.pytorch.org/whl/torch_stable.html'
         run(f'"{python}" -m {torch_command}', "Installing torch", "Couldn't install torch", live=True)
     if not is_installed('torchaudio'):
+        print("检测到 torchaudio 未安装， 自动安装 0.13.0 版本")
         torch_command = "pip3 install torchaudio==0.13.0"
         run(f'"{python}" -m {torch_command}', "Installing torchaudio", "Couldn't install torchaudio", live=True)
     
     if not is_installed("pypinyin"):
         run_pip(f"install pypinyin", "pypinyin")
-    if not is_installed("matplotlib"):
-        run_pip(f"install matplotlib", "matplotlib")
-    if not is_installed("Cython"):
-        run_pip(f"install Cython==0.29.21", "Cython")
+
     if not is_installed("librosa"):
         run_pip(f"install librosa==0.6.0", "librosa")
-    
-    try:
-        import monotonic_align
-        monotonic_align.maximum_path
-    except:
-        print('正在编译monotonic_align模块')
-        run(f"cd monotonic_align; {python} setup.py build_ext --inplace; cd ..", live=True)
 
     if "--exit" in sys.argv:
         print("Exiting because of --exit argument")
         exit(0)
 
-prepare_env()
+# 运行环境按需下载
+def prepare_training_dependency():
+    if not is_installed("Cython"):
+        run_pip(f"install Cython==0.29.21", "Cython")
+    if not is_installed("matplotlib"):
+        run_pip(f"install matplotlib", "matplotlib")
+    if not is_installed("tensorboard"): 
+        run_pip(f'install protobuf==3.19.0')
+        run_pip(f"install tensorboard==2.3.0", "tensorboard")
+    try:
+        import monotonic_align
+        monotonic_align.maximum_path
+    except:
+        print('正在编译monotonic_align模块。如果编译失败可以到仓库查找预编译的monotonic_align二进制')
+        run(f"cd monotonic_align; mkdir monotonic_align; {python} setup.py build_ext --inplace; cd ..", live=True)
+
+    if "--exit" in sys.argv:
+        print("Exiting because of --exit argument")
+        exit(0)
+
+prepare_common_dependency()
+    
 
 import torch
 def load_model(model, saved_state_dict):
