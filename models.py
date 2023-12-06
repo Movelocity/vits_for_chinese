@@ -7,7 +7,10 @@ from torch.nn import functional as F
 import commons
 import modules
 import attentions
-import monotonic_align
+try:
+  import monotonic_align
+except:
+  print("monotonic align模块未编译，但可以正常推理使用")
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
