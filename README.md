@@ -10,7 +10,9 @@ Copied from this repo: https://github.com/jaywalnut310/vits
 
 - **使用方法详见** [notebooks/infer.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/infer.ipynb)
 
-- **windows平台调用vgmstream的脚本** [notebooks/convert.bat.txt](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/convert.bat.txt) (使用时去掉txt后缀)
+- **windows平台调用vgmstream的脚本** [notebooks/vgm_decode.py](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/vgm_decode.py) 。不推荐使用 `.bat` 的版本，使用 `.py` 的版本易读性更高。
+  - 打开方式：命令行运行 `python vgm_decode.py`
+  - 或者右键打开文件，使用 python 打开。
 
 ### 2034-02-28 更新日志
 ```
