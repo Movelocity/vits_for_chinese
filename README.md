@@ -4,15 +4,15 @@ Original project: https://github.com/jaywalnut310/vits
 
 - **语音数据集制作方法** [notebooks/make_dataset.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/make_dataset.ipynb)
 
-- 可以用 whisper 识别语音: https://github.com/openai/whisper
+- **可以用 whisper 识别语音**: https://github.com/openai/whisper
 
 - **训练方法详见** [notebooks/train.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/train.ipynb)
 
 - **使用方法详见** [notebooks/infer.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/infer.ipynb)
 
-- **windows平台调用vgmstream的脚本** [notebooks/vgm_decode.py](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/vgm_decode.py) 。不推荐使用 `.bat` 的版本，使用 `.py` 的版本易读性更高。
+- **windows平台调用vgmstream的脚本** [notebooks/vgm_decode.py](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/vgm_decode.py) 。不推荐使用 `.bat` 的版本，使用 `.py` 的版本易读性更高
   - 打开方式：命令行运行 `python vgm_decode.py`
-  - 或者右键打开文件，使用 python 打开。
+  - 或者右键打开文件，使用 python 打开
 
 ### 2034-02-28 更新日志
 ```
