@@ -1,6 +1,6 @@
 ### 中文语音合成
 
-Copied from this repo: https://github.com/jaywalnut310/vits
+Original project: https://github.com/jaywalnut310/vits
 
 - **语音数据集制作方法** [notebooks/make_dataset.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/make_dataset.ipynb)
 
