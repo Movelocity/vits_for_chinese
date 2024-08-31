@@ -4,6 +4,8 @@
 
 VITS 是一个用于文本合成语音的项目，虽然截至 2024-08-31 社区已经出现了很多更好用的语音合成模型，比如 BertVITS2, GPT-SoVITS 等，效果非常好，但模型推理普遍对算力要求高。而本项目基于原始的 VITS 进行修改并加入汉语拼音的支持，模型文件大小不会超过170MB。训练出来的模型也适合在低算力（CPU）场景下合成中文语音，同时也适合入门深度学习的朋友学习和修改代码。
 
+如果你看懂了 VITS 的代码，再去学习其它和 VITS 相关的项目，就会相对容易看懂。
+
 ### 使用方式
 - **语音数据集制作方法** [notebooks/make_dataset.ipynb](https://github.com/Movelocity/vits_for_chinese/blob/main/notebooks/make_dataset.ipynb)
 - **可以用 whisper 识别语音**: https://github.com/openai/whisper
