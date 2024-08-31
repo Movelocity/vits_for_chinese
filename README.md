@@ -62,22 +62,16 @@ VITS 是一个用于文本合成语音的项目，虽然截至 2024-08-31 社区
 **2023-02-22 更新日志**
 ```
 1.train_single_card.py 可以只使用单张显卡训练，降低配置难度
-
 2.取消 eval_loader, 直接从验证集读取前四条并测试合成效果，可以在 tensorboard 查看
-
 3.取消单 speaker 和多 speaker 的训练区分，统一使用train.py或train_single_card.py，便于后续分享模型主干，分离说话者编码。
-
 4.只有一个speaker时，默认speaker id=0
 ```
 
 **2023-02-25 更新日志**
 ```
 1.加入 python 版本检查，只能使用 python3，防止出现意料之外的错误
-
 2.检查多个依赖包并自动安装
-
 3.不用手动编译 monotonic_align，现在由程序自动编译，具体代码在 utils.py
-
 4.合并了 train_single_card.py 和 trian.py，统一用 train.py
 ```
 
