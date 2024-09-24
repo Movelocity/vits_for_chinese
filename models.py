@@ -7,10 +7,10 @@ from torch.nn import functional as F
 import commons
 import modules
 import attentions
-try:
+try:  # monotonic_align 仅在训练时匹配序列长度，模型推理时用不到。
   import monotonic_align
 except:
-  print("monotonic align模块未编译，但可以正常推理使用")
+  print("monotonic align模块未编译，但可以正常推理使用")  # 仅推理的场景，不必安装 monotonic align
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
 from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
